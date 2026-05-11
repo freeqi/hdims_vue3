@@ -1,10 +1,2 @@
-import type { UserInfo } from '@vben/types';
-
-import { requestClient } from '#/api/request';
-
-/**
- * 获取用户信息
- */
-export async function getUserInfoApi() {
-  return requestClient.get<UserInfo>('/user/info');
-}
+// 用户信息接口已迁移到 auth.ts 中（对接原血透系统）
+// 此文件保留用于后续扩展
