@@ -1,741 +1,969 @@
-<script lang="ts" setup>
-import { ref, reactive, onMounted } from 'vue';
-import {
-  ElTable,
-  ElTableColumn,
-  ElButton,
-  ElSelect,
-  ElDatePicker,
-  ElInput,
-  ElDialog,
-  ElForm,
-  ElFormItem,
-  ElOption,
-  ElMessage,
-  ElMessageBox,
-  ElPagination,
-} from 'element-plus';
-import type { FormInstance } from 'element-plus';
-
-// ==================== 类型定义 ====================
-
-interface ScheduleItem {
-  id: string;
-  bedNo: string;
-  patientName: string;
-  patientId: string;
-  gender: string;
-  age: number;
-  treatmentArea: string;
-  shift: string;
-  treatmentMode: string;
-  dialyzer: string;
-  perfusor: string;
-  anticoagulant: string;
-  vascularAccess: string;
-  status: string;
-  date: string;
-}
-
-interface ScheduleFormData {
-  patientId: string;
-  patientName: string;
-  bedNo: string;
-  date: string;
-  shift: string;
-  treatmentArea: string;
-  treatmentMode: string;
-  dialyzer: string;
-  perfusor: string;
-  anticoagulant: string;
-  vascularAccess: string;
-}
-
-// ==================== 常量 ====================
-
-const SHIFT_OPTIONS = [
-  { label: '上午', value: '上午' },
-  { label: '下午', value: '下午' },
-  { label: '晚上', value: '晚上' },
-];
-
-const AREA_OPTIONS = [
-  { label: '一区', value: '一区' },
-  { label: '二区', value: '二区' },
-  { label: '三区', value: '三区' },
-  { label: '四区', value: '四区' },
-];
-
-const TREATMENT_MODE_OPTIONS = [
-  { label: 'HD', value: 'HD' },
-  { label: 'HDF', value: 'HDF' },
-  { label: 'HD+HP', value: 'HD+HP' },
-  { label: 'CRRT', value: 'CRRT' },
-  { label: 'HF', value: 'HF' },
-];
-
-const DIALYZER_OPTIONS = [
-  { label: 'FX80', value: 'FX80' },
-  { label: 'FX100', value: 'FX100' },
-  { label: 'F60S', value: 'F60S' },
-  { label: 'F80S', value: 'F80S' },
-];
-
-const ANTICOAGULANT_OPTIONS = [
-  { label: '普通肝素', value: '普通肝素' },
-  { label: '低分子肝素', value: '低分子肝素' },
-  { label: '无肝素', value: '无肝素' },
-  { label: '局部枸橼酸', value: '局部枸橼酸' },
-];
-
-const VASCULAR_ACCESS_OPTIONS = [
-  { label: '动静脉内瘘', value: '动静脉内瘘' },
-  { label: '中心静脉导管', value: '中心静脉导管' },
-  { label: '人造血管', value: '人造血管' },
-  { label: '直接穿刺', value: '直接穿刺' },
-];
-
-const STATUS_MAP: Record<string, { text: string; type: string }> = {
-  已排: { text: '已排', type: 'info' },
-  未排: { text: '未排', type: 'warning' },
-  已签到: { text: '已签到', type: 'primary' },
-  透析中: { text: '透析中', type: 'success' },
-  已完成: { text: '已完成', type: '' },
-};
-
-// ==================== 状态 ====================
-
-const loading = ref(false);
-const tableData = ref<ScheduleItem[]>([]);
-const total = ref(0);
-const currentPage = ref(1);
-const pageSize = ref(20);
-
-// 搜索条件
-const searchDate = ref(new Date());
-const searchShift = ref('');
-const searchAreas = ref<string[]>([]);
-const searchKeyword = ref('');
-
-// 弹窗
-const dialogVisible = ref(false);
-const dialogTitle = ref('新增排班');
-const formRef = ref<FormInstance>();
-const formData = reactive<ScheduleFormData>({
-  patientId: '',
-  patientName: '',
-  bedNo: '',
-  date: '',
-  shift: '',
-  treatmentArea: '',
-  treatmentMode: '',
-  dialyzer: '',
-  perfusor: '',
-  anticoagulant: '',
-  vascularAccess: '',
-});
-
-const formRules = reactive({
-  patientId: [{ required: true, message: '请选择患者', trigger: 'change' }],
-  bedNo: [{ required: true, message: '请选择床位', trigger: 'change' }],
-  date: [{ required: true, message: '请选择日期', trigger: 'change' }],
-  shift: [{ required: true, message: '请选择班次', trigger: 'change' }],
-  treatmentMode: [{ required: true, message: '请选择治疗模式', trigger: 'change' }],
-  anticoagulant: [{ required: true, message: '请选择抗凝剂', trigger: 'change' }],
-});
-
-// ==================== API 配置 ====================
-
-// 请求头配置（后续从store或cookie中获取）
-function getHeaders() {
-  return {
-    Account: '',
-    Token: '',
-    ClientType: 'Web',
-    OrgId: '',
-    OrgAuthCode: '',
-    Department: '',
-  };
-}
-
-// ==================== API 调用（已注释，使用mock数据） ====================
-
-// import axios from 'axios';
-
-// /** 获取排班列表 */
-// async function fetchScheduleList() {
-//   loading.value = true;
-//   try {
-//     const params = {
-//       Date: formatDate(searchDate.value),
-//       Shift: searchShift.value,
-//       PatientType: '',
-//       TreatmentRegion: searchAreas.value.join(','),
-//       OrderType: '',
-//       PageIndex: currentPage.value,
-//       PageSize: pageSize.value,
-//     };
-//     const res = await axios.get('/api/v1/SchedulingManage/4017', {
-//       params,
-//       headers: getHeaders(),
-//     });
-//     if (res.data?.Code === 0) {
-//       tableData.value = res.data.Data?.List ?? [];
-//       total.value = res.data.Data?.Total ?? 0;
-//     }
-//   } catch (error) {
-//     ElMessage.error('获取排班列表失败');
-//   } finally {
-//     loading.value = false;
-//   }
-// }
-
-// /** 新增排班 */
-// async function addSchedule(data: ScheduleFormData) {
-//   const res = await axios.post('/api/v1/SchedulingManage/1004', data, {
-//     headers: getHeaders(),
-//   });
-//   if (res.data?.Code === 0) {
-//     ElMessage.success('新增排班成功');
-//     fetchScheduleList();
-//   } else {
-//     ElMessage.error(res.data?.Message || '新增排班失败');
-//   }
-// }
-
-// /** 修改排班 */
-// async function updateSchedule(data: ScheduleFormData & { id: string }) {
-//   const res = await axios.put('/api/v1/SchedulingManage/3012', data, {
-//     headers: getHeaders(),
-//   });
-//   if (res.data?.Code === 0) {
-//     ElMessage.success('修改排班成功');
-//     fetchScheduleList();
-//   } else {
-//     ElMessage.error(res.data?.Message || '修改排班失败');
-//   }
-// }
-
-// /** 删除排班 */
-// async function deleteSchedule(id: string) {
-//   const res = await axios.delete('/api/v1/SchedulingManage/2003', {
-//     params: { id },
-//     headers: getHeaders(),
-//   });
-//   if (res.data?.Code === 0) {
-//     ElMessage.success('删除排班成功');
-//     fetchScheduleList();
-//   } else {
-//     ElMessage.error(res.data?.Message || '删除排班失败');
-//   }
-// }
-
-// ==================== Mock 数据 ====================
-
-function generateMockData(): ScheduleItem[] {
-  const names = [
-    '张三', '李四', '王五', '赵六', '钱七', '孙八', '周九', '吴十',
-    '郑十一', '冯十二', '陈小明', '林小红', '黄大伟', '杨秀英', '刘建国',
-    '吕芳华', '朱志强', '许丽娟', '何国栋', '施美玲',
-  ];
-  const modes = ['HD', 'HDF', 'HD+HP', 'CRRT', 'HF'];
-  const dialyzers = ['FX80', 'FX100', 'F60S', 'F80S'];
-  const anticoagulants = ['普通肝素', '低分子肝素', '无肝素', '局部枸橼酸'];
-  const accesses = ['动静脉内瘘', '中心静脉导管', '人造血管', '直接穿刺'];
-  const statuses = ['已排', '未排', '已签到', '透析中', '已完成'];
-  const areas = ['一区', '二区', '三区', '四区'];
-  const shifts = ['上午', '下午', '晚上'];
-
-  const list: ScheduleItem[] = [];
-  for (let i = 0; i < 20; i++) {
-    list.push({
-      id: `SCH${String(i + 1).padStart(4, '0')}`,
-      bedNo: `${i + 1}号床`,
-      patientName: names[i],
-      patientId: `P${String(10001 + i)}`,
-      gender: i % 3 === 0 ? '女' : '男',
-      age: 30 + (i % 40),
-      treatmentArea: areas[i % 4],
-      shift: shifts[i % 3],
-      treatmentMode: modes[i % 5],
-      dialyzer: dialyzers[i % 4],
-      perfusor: i % 3 === 2 ? 'HA330' : '',
-      anticoagulant: anticoagulants[i % 4],
-      vascularAccess: accesses[i % 4],
-      status: statuses[i % 5],
-      date: formatDate(searchDate.value),
-    });
-  }
-  return list;
-}
-
-// ==================== 工具函数 ====================
-
-function formatDate(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-// ==================== 业务逻辑 ====================
-
-/** 获取排班列表（使用mock数据） */
-function fetchScheduleList() {
-  loading.value = true;
-  setTimeout(() => {
-    let data = generateMockData();
-
-    // 按班次筛选
-    if (searchShift.value) {
-      data = data.filter((item) => item.shift === searchShift.value);
-    }
-
-    // 按分区筛选
-    if (searchAreas.value.length > 0) {
-      data = data.filter((item) => searchAreas.value.includes(item.treatmentArea));
-    }
-
-    // 按关键词搜索
-    if (searchKeyword.value) {
-      const kw = searchKeyword.value.toLowerCase();
-      data = data.filter(
-        (item) =>
-          item.patientName.toLowerCase().includes(kw) ||
-          item.bedNo.includes(kw) ||
-          item.patientId.toLowerCase().includes(kw),
-      );
-    }
-
-    total.value = data.length;
-    const start = (currentPage.value - 1) * pageSize.value;
-    tableData.value = data.slice(start, start + pageSize.value);
-    loading.value = false;
-  }, 300);
-}
-
-/** 搜索 */
-function handleSearch() {
-  currentPage.value = 1;
-  fetchScheduleList();
-}
-
-/** 重置搜索 */
-function handleReset() {
-  searchDate.value = new Date();
-  searchShift.value = '';
-  searchAreas.value = [];
-  searchKeyword.value = '';
-  currentPage.value = 1;
-  fetchScheduleList();
-}
-
-/** 分页变化 */
-function handlePageChange(page: number) {
-  currentPage.value = page;
-  fetchScheduleList();
-}
-
-function handleSizeChange(size: number) {
-  pageSize.value = size;
-  currentPage.value = 1;
-  fetchScheduleList();
-}
-
-/** 新增排班 */
-function handleAdd() {
-  dialogTitle.value = '新增排班';
-  resetForm();
-  formData.date = formatDate(searchDate.value);
-  dialogVisible.value = true;
-}
-
-/** 修改排班 */
-function handleEdit(row: ScheduleItem) {
-  dialogTitle.value = '修改排班';
-  Object.assign(formData, {
-    patientId: row.patientId,
-    patientName: row.patientName,
-    bedNo: row.bedNo,
-    date: row.date,
-    shift: row.shift,
-    treatmentArea: row.treatmentArea,
-    treatmentMode: row.treatmentMode,
-    dialyzer: row.dialyzer,
-    perfusor: row.perfusor,
-    anticoagulant: row.anticoagulant,
-    vascularAccess: row.vascularAccess,
-  });
-  dialogVisible.value = true;
-}
-
-/** 删除排班 */
-async function handleDelete(row: ScheduleItem) {
-  try {
-    await ElMessageBox.confirm(
-      `确定要删除患者"${row.patientName}"的排班吗？`,
-      '提示',
-      { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' },
-    );
-    // await deleteSchedule(row.id);
-    ElMessage.success('删除排班成功');
-    fetchScheduleList();
-  } catch {
-    // 用户取消
-  }
-}
-
-/** 提交表单 */
-async function handleSubmit() {
-  if (!formRef.value) return;
-  await formRef.value.validate(async (valid) => {
-    if (!valid) return;
-    try {
-      // if (dialogTitle.value === '新增排班') {
-      //   await addSchedule(formData);
-      // } else {
-      //   await updateSchedule({ ...formData, id: editingId.value });
-      // }
-      ElMessage.success(dialogTitle.value === '新增排班' ? '新增排班成功' : '修改排班成功');
-      dialogVisible.value = false;
-      fetchScheduleList();
-    } catch {
-      ElMessage.error('操作失败');
-    }
-  });
-}
-
-/** 导出 */
-function handleExport() {
-  ElMessage.info('导出功能开发中...');
-}
-
-/** 重置表单 */
-function resetForm() {
-  Object.assign(formData, {
-    patientId: '',
-    patientName: '',
-    bedNo: '',
-    date: '',
-    shift: '',
-    treatmentArea: '',
-    treatmentMode: '',
-    dialyzer: '',
-    perfusor: '',
-    anticoagulant: '',
-    vascularAccess: '',
-  });
-  formRef.value?.resetFields();
-}
-
-/** 跳转患者详情 */
-function goToPatientDetail(patientId: string) {
-  ElMessage.info(`跳转患者详情: ${patientId}`);
-  // router.push({ name: 'PatientDetail', params: { id: patientId } });
-}
-
-/** 获取状态标签类型 */
-function getStatusType(status: string): string {
-  return STATUS_MAP[status]?.type ?? 'info';
-}
-
-// ==================== 生命周期 ====================
-
-onMounted(() => {
-  fetchScheduleList();
-});
-</script>
-
 <template>
-  <div class="cycle-scheduling-tab">
+  <div class="paibanx">
     <!-- 顶部工具栏 -->
-    <div class="toolbar">
-      <div class="toolbar-left">
-        <ElDatePicker
-          v-model="searchDate"
-          type="date"
-          placeholder="选择排班日期"
-          value-format="YYYY-MM-DD"
-          style="width: 180px"
-          @change="handleSearch"
-        />
-        <ElSelect
-          v-model="searchShift"
-          placeholder="班次"
-          clearable
-          style="width: 120px"
-          @change="handleSearch"
-        >
-          <ElOption
-            v-for="item in SHIFT_OPTIONS"
-            :key="item.value"
-            :label="item.label"
-            :value="item.value"
-          />
-        </ElSelect>
-        <ElSelect
-          v-model="searchAreas"
-          placeholder="治疗区域"
-          clearable
-          multiple
-          collapse-tags
-          collapse-tags-tooltip
-          style="width: 200px"
-          @change="handleSearch"
-        >
-          <ElOption
-            v-for="item in AREA_OPTIONS"
-            :key="item.value"
-            :label="item.label"
-            :value="item.value"
-          />
-        </ElSelect>
-        <ElInput
-          v-model="searchKeyword"
-          placeholder="搜索姓名/床号/患者编号"
-          clearable
-          style="width: 220px"
-          @keyup.enter="handleSearch"
-          @clear="handleSearch"
-        />
-        <ElButton type="primary" @click="handleSearch">查询</ElButton>
-        <ElButton @click="handleReset">重置</ElButton>
+    <div style="display: flex">
+      <div style="display: flex; justify-content: flex-start; align-items: center">
+        <ElButton type="info" @click="exportTable">{{ $t('导出排班表') }}</ElButton>
+        <ElButton type="success" v-if="HZPB_AUTO" v-show="now == -1" @click="autoPb" :loading="autoLoading">{{ $t('自动排班') }}</ElButton>
+        <ElButton type="success" v-if="HZPB_AUTO_P" v-show="now != -1" @click="autoSinglePb" :loading="autoLoading">{{ $t('个人排班') }}</ElButton>
+        <ElButton type="primary" @click="multiChangeModal = true" v-if="$config.isvip()" class="now_vip">{{ $t('批量修改透析器') }}/{{ $t('灌流器') }}</ElButton>
+        <ElButton type="primary" :loading="autoLoading" :disabled="CycleValue == 0 && currentWeekIndex === 0" @click="loadDataPrev">{{ $t('上一周期') }}</ElButton>
+        <ElButton type="primary" :loading="autoLoading" @click="loadDataNext">{{ $t('下一周期') }}</ElButton>
+        <ElButton type="danger" v-if="HZPB_DELETE_ALL" v-show="now == -1" @click="deleteData" :loading="autoLoading">{{ $t('删除全部排班') }}</ElButton>
+        <ElButton type="danger" v-if="HZPB_DELETE_P" v-show="now != -1" @click="deleteData" :loading="autoLoading">{{ $t('删除个人排班') }}</ElButton>
+        <ElButton type="info" @click="queryList" v-if="$config.isvip()" class="now_vip">{{ $t('根据时间段查询') }}</ElButton>
       </div>
-      <div class="toolbar-right">
-        <ElButton type="primary" @click="handleAdd">新增排班</ElButton>
-        <ElButton @click="handleExport">导出</ElButton>
+      <div style="margin-left: auto;display: flex; justify-content: flex-start; align-items: center">
+        <ElCheckbox v-model="showDialyzer">{{ $t('显示透析器') }}</ElCheckbox>
+        <ElDatePicker type="date" style="width: 150px" v-model="sdate" @change="selectSearchDate" :placeholder="$t('请选择日期')"></ElDatePicker>
+        <ElButton type="primary" :loading="searchLoading" @click="searchSch">{{ $t('查询') }}</ElButton>
+        <ElButton type="success" v-if="HZQD_NEW" @click="querySign" :loading="loading2">{{ $t('生成签到表') }}</ElButton>
+        <ElButton type="info" @click="goBed">{{ $t('去排床') }}</ElButton>
+        <ElButton type="primary" @click="lookResidue" v-show="now != -1" v-if="$config.isvip()" class="now_vip">{{ $t('耗材剩余情况') }}</ElButton>
       </div>
     </div>
 
-    <!-- 表格 -->
-    <ElTable
-      v-loading="loading"
-      :data="tableData"
-      border
-      stripe
-      style="width: 100%"
-      :header-cell-style="{ background: '#f5f7fa', color: '#606266' }"
-    >
-      <ElTableColumn type="index" label="序号" width="60" align="center" />
-      <ElTableColumn prop="bedNo" label="床号" width="80" align="center" />
-      <ElTableColumn prop="patientName" label="姓名" width="90" align="center">
-        <template #default="{ row }">
-          <el-link type="primary" @click="goToPatientDetail(row.patientId)">
-            {{ row.patientName }}
-          </el-link>
-        </template>
-      </ElTableColumn>
-      <ElTableColumn prop="gender" label="性别" width="60" align="center" />
-      <ElTableColumn prop="age" label="年龄" width="60" align="center" />
-      <ElTableColumn prop="treatmentArea" label="治疗区域" width="90" align="center" />
-      <ElTableColumn prop="shift" label="班次" width="80" align="center" />
-      <ElTableColumn prop="treatmentMode" label="治疗模式" width="90" align="center" />
-      <ElTableColumn prop="dialyzer" label="透析器" width="90" align="center" />
-      <ElTableColumn prop="perfusor" label="灌流器" width="90" align="center" />
-      <ElTableColumn prop="anticoagulant" label="抗凝剂" width="110" align="center" />
-      <ElTableColumn prop="vascularAccess" label="血管通路" width="120" align="center" />
-      <ElTableColumn prop="status" label="状态" width="90" align="center">
-        <template #default="{ row }">
-          <el-tag :type="getStatusType(row.status)" size="small">
-            {{ row.status }}
-          </el-tag>
-        </template>
-      </ElTableColumn>
-      <ElTableColumn label="操作" width="140" align="center" fixed="right">
-        <template #default="{ row }">
-          <ElButton type="primary" link size="small" @click="handleEdit(row)">
-            修改
-          </ElButton>
-          <ElButton type="danger" link size="small" @click="handleDelete(row)">
-            删除
-          </ElButton>
-        </template>
-      </ElTableColumn>
-    </ElTable>
-
-    <!-- 分页 -->
-    <div class="pagination-wrapper">
-      <ElPagination
-        v-model:current-page="currentPage"
-        v-model:page-size="pageSize"
-        :page-sizes="[10, 20, 50, 100]"
-        :total="total"
-        layout="total, sizes, prev, pager, next, jumper"
-        background
-        @size-change="handleSizeChange"
-        @current-change="handlePageChange"
-      />
+    <!-- 排班表格 -->
+    <div class="ftablex">
+      <table :class="{tabled:1,single:now!=-1}" id="pbTable" cellpadding="0" cellspacing="0">
+        <thead class="thead">
+          <tr :class="{fshow:now!=-1}">
+            <th class="test1" style="width: 40px">{{ $t('序号') }}</th>
+            <th class="test2" style="width: 80px">{{ $t('姓名') }}</th>
+            <th v-for="item in tableHead" :colspan="item.colspan" :key="item.date">
+              <p v-html="item.date"></p>
+            </th>
+          </tr>
+          <tr>
+            <th class="test1" style="width: 40px"></th>
+            <th class="test2" style="width: 80px"></th>
+            <th v-for="item in tableHeadWithShift" :key="item.date + item.shift">{{ item.shift }}</th>
+          </tr>
+        </thead>
+        <tbody ref="viewBox" id="dass">
+          <tr v-for="(item,index) in filterData" :key="index" style="position: relative;">
+            <td class="test1" style="text-align: center;width: 40px">{{ item.No }}</td>
+            <td class="test2" style="text-align: center;width: 80px" @click="clickPat(item.PatientId)">{{ item.PatientName }}</td>
+            <td
+              v-for="headItem in tableHeadWithShift"
+              :class="{ disabledTd:pbTdstatus(item[`week_content_${headItem.index}`]) != 1 }"
+              :style="pbTdstatus(item[`week_content_${headItem.index}`]) != 1 ? '' : `background: ${dialysisColorMap(getFormatTdDialysisType(item, `week_content_${headItem.index}_${headItem.shift}`))}`"
+              @click="onClickPatientShift(item, headItem.index, headItem.shift)"
+            >
+              <template v-if="item.cycleShiftMap && item.cycleShiftMap[`week_content_${headItem.index}_${headItem.shift}`]">
+                <div>{{ item.cycleShiftMap[`week_content_${headItem.index}_${headItem.shift}`].dialysisType }}</div>
+                <div v-show="showDialyzer">{{item.cycleShiftMap[`week_content_${headItem.index}_${headItem.shift}`].dialyzer }}</div>
+              </template>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
-    <!-- 新增/修改弹窗 -->
-    <ElDialog
-      v-model="dialogVisible"
-      :title="dialogTitle"
-      width="650px"
-      destroy-on-close
-      @closed="resetForm"
-    >
-      <ElForm
-        ref="formRef"
-        :model="formData"
-        :rules="formRules"
-        label-width="100px"
-        label-position="right"
-      >
-        <ElFormItem label="患者" prop="patientId">
-          <ElSelect
-            v-model="formData.patientId"
-            placeholder="请选择患者"
-            filterable
-            style="width: 100%"
-          >
-            <ElOption label="张三 (P10001)" value="P10001" />
-            <ElOption label="李四 (P10002)" value="P10002" />
-            <ElOption label="王五 (P10003)" value="P10003" />
-            <ElOption label="赵六 (P10004)" value="P10004" />
-            <ElOption label="钱七 (P10005)" value="P10005" />
-          </ElSelect>
-        </ElFormItem>
-        <ElFormItem label="床位" prop="bedNo">
-          <ElSelect
-            v-model="formData.bedNo"
-            placeholder="请选择床位"
-            style="width: 100%"
-          >
-            <ElOption v-for="i in 20" :key="i" :label="`${i}号床`" :value="`${i}号床`" />
-          </ElSelect>
-        </ElFormItem>
-        <ElFormItem label="日期" prop="date">
-          <ElDatePicker
-            v-model="formData.date"
-            type="date"
-            placeholder="选择日期"
-            value-format="YYYY-MM-DD"
-            style="width: 100%"
-          />
-        </ElFormItem>
-        <ElFormItem label="班次" prop="shift">
-          <ElSelect v-model="formData.shift" placeholder="请选择班次" style="width: 100%">
-            <ElOption
-              v-for="item in SHIFT_OPTIONS"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
-            />
-          </ElSelect>
-        </ElFormItem>
-        <ElFormItem label="治疗区域" prop="treatmentArea">
-          <ElSelect
-            v-model="formData.treatmentArea"
-            placeholder="请选择治疗区域"
-            style="width: 100%"
-          >
-            <ElOption
-              v-for="item in AREA_OPTIONS"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
-            />
-          </ElSelect>
-        </ElFormItem>
-        <ElFormItem label="治疗模式" prop="treatmentMode">
-          <ElSelect
-            v-model="formData.treatmentMode"
-            placeholder="请选择治疗模式"
-            style="width: 100%"
-          >
-            <ElOption
-              v-for="item in TREATMENT_MODE_OPTIONS"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
-            />
-          </ElSelect>
-        </ElFormItem>
-        <ElFormItem label="透析器" prop="dialyzer">
-          <ElSelect
-            v-model="formData.dialyzer"
-            placeholder="请选择透析器"
-            style="width: 100%"
-          >
-            <ElOption
-              v-for="item in DIALYZER_OPTIONS"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
-            />
-          </ElSelect>
-        </ElFormItem>
-        <ElFormItem label="灌流器" prop="perfusor">
-          <ElInput v-model="formData.perfusor" placeholder="请输入灌流器（选填）" />
-        </ElFormItem>
-        <ElFormItem label="抗凝剂" prop="anticoagulant">
-          <ElSelect
-            v-model="formData.anticoagulant"
-            placeholder="请选择抗凝剂"
-            style="width: 100%"
-          >
-            <ElOption
-              v-for="item in ANTICOAGULANT_OPTIONS"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
-            />
-          </ElSelect>
-        </ElFormItem>
-        <ElFormItem label="血管通路" prop="vascularAccess">
-          <ElSelect
-            v-model="formData.vascularAccess"
-            placeholder="请选择血管通路"
-            style="width: 100%"
-          >
-            <ElOption
-              v-for="item in VASCULAR_ACCESS_OPTIONS"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
-            />
-          </ElSelect>
-        </ElFormItem>
+    <!-- 批量修改透析器/灌流器弹窗 -->
+    <ElDialog v-model="multiChangeModal" width="800" :draggable="true" :title="$t('批量修改透析器')+'/'+ $t('灌流器')">
+      <ElForm ref="multiChangeFormRef" :model="multiChangeForm" :rules="multiChangeFormRule" label-width="80px">
+        <ElRow>
+          <ElCol :span="8">
+            <ElFormItem :label="$t('修改类型')" prop="FieldName">
+              <ElSelect v-model="multiChangeForm.FieldName" @change="changeMultiType">
+                <ElOption v-for="item in changeTypeList" :value="item.Key" :key="item.Key">{{ item.Name }}</ElOption>
+              </ElSelect>
+            </ElFormItem>
+          </ElCol>
+          <ElCol :span="16">
+            <ElFormItem :label="$t('选择患者')" prop="selectedPatientIds">
+              <ElSelect filterable multiple v-model="multiChangeForm.selectedPatientIds" @change="changeHospitals">
+                <ElOption value="0">{{ $t('全部') }}</ElOption>
+                <ElOption v-for="item in patientList" :value="item.Id" :key="item.Id">{{ item.Name }}</ElOption>
+              </ElSelect>
+            </ElFormItem>
+          </ElCol>
+          <ElCol :span="12">
+            <ElFormItem :label="$t('旧值')" prop="OldValue">
+              <ElSelect v-model="multiChangeForm.OldValue" :placeholder="$t('请选择旧值')">
+                <ElOption v-for="ff in autoChangeList" :value="ff.Name" :key="ff.Name">{{ ff.Name }}</ElOption>
+              </ElSelect>
+            </ElFormItem>
+          </ElCol>
+          <ElCol :span="12">
+            <ElFormItem :label="$t('新值')" prop="NewValue">
+              <ElSelect v-model="multiChangeForm.NewValue" :placeholder="$t('请选择新值')">
+                <ElOption v-for="ff in autoChangeList" :value="ff.Name" :key="ff.Name">{{ ff.Name }}</ElOption>
+              </ElSelect>
+            </ElFormItem>
+          </ElCol>
+        </ElRow>
+        <ElRow>
+          <ElCol :span="12">
+            <ElFormItem :label="$t('时间段')">
+              <ElDatePicker type="daterange" v-model="multiChangeForm.TimeRange" @change="changeTimeRange" :placeholder="$t('请选择日期范围')" style="width: 100%;" />
+            </ElFormItem>
+          </ElCol>
+        </ElRow>
       </ElForm>
       <template #footer>
-        <ElButton @click="dialogVisible = false">取消</ElButton>
-        <ElButton type="primary" @click="handleSubmit">确定</ElButton>
+        <ElButton type="primary" @click="multiChangeDialysis" :loading="multiSaveLoading">{{ $t('确定') }}</ElButton>
+        <ElButton @click="multiChangeModal = false; multiChangeFormRef?.resetFields();">{{ $t('取消') }}</ElButton>
+      </template>
+    </ElDialog>
+
+    <!-- 患者排班弹窗 -->
+    <ElDialog v-model="pbMoadl" :title="$t('患者排班') + ' ' + patName + '/' + patDate" width="600">
+      <div>
+        <ElRow style="margin-top: 20px">
+          <ElForm :model="pdData" label-position="top">
+            <ElCol :span="12" style="padding: 0 8px">
+              <ElFormItem :label="$t('班次')">
+                <ElSelect v-model="pdData.Shift">
+                  <ElOption v-for="(option, index) in bcData" :value="option.ShiftName" :key="index">{{ option.ShiftName }}</ElOption>
+                </ElSelect>
+              </ElFormItem>
+              <ElFormItem :label="$t('透析器')">
+                <ElSelect v-model="pdData.Dialyzer">
+                  <ElOption v-for="(option, index) in zlmsData" :value="option.Name" :key="index">{{ option.Name }}</ElOption>
+                </ElSelect>
+              </ElFormItem>
+            </ElCol>
+            <ElCol :span="12" style="padding: 0 8px">
+              <ElFormItem :label="$t('治疗模式')">
+                <ElSelect v-model="pdData.DialysisType" @change="DialysisTypeMd">
+                  <ElOption v-for="(option, index) in filterTxqDataNew" :value="option.Value" :key="index">{{ option.Name }}</ElOption>
+                </ElSelect>
+              </ElFormItem>
+              <ElFormItem v-if="pdData.DialysisType && pdData.DialysisType.includes('HP')" :label="$t('灌流器')">
+                <ElSelect v-model="pdData.DialysisPerfusion">
+                  <ElOption v-for="(option, index) in glqDataNew" :value="option.Value" :key="index">{{ option.Name }}</ElOption>
+                </ElSelect>
+              </ElFormItem>
+            </ElCol>
+            <ElCol :span="12" style="padding: 0 8px">
+              <ElFormItem :label="$t('患者类型')">
+                <ElSelect v-model="pdData.PatientType">
+                  <ElOption v-for="(option, index) in PatientTypeList" :value="option.Id" :key="index">{{ option.Name }}</ElOption>
+                </ElSelect>
+              </ElFormItem>
+            </ElCol>
+          </ElForm>
+        </ElRow>
+      </div>
+      <template #footer>
+        <ElButton type="primary" @click="addPb" :loading="submitLoading">{{ $t('提交') }}</ElButton>
+        <ElButton @click="pbMoadl = false">{{ $t('取消') }}</ElButton>
+        <ElButton type="danger" style="margin-right: 100px" @click="delPb" v-if="pdData.DialysisPerfusion" :loading="deleteLoading">{{ $t('删除') }}</ElButton>
+      </template>
+    </ElDialog>
+
+    <!-- 重新排班弹窗 -->
+    <ElDialog v-model="reschedulingModel" :title="$t('重新排班')" width="800" @close="reschedulingCancel">
+      <div>
+        <ElRow style="margin-top: 20px">
+          <ElForm :model="reschedulingData" label-position="top" :rules="reschedulingRule">
+            <ElCol :span="24" style="padding: 0 8px">
+              <ElFormItem :label="$t('日期(多选)')">
+                <ElDatePicker v-model="reschedulingData.DateList" type="dates" @change="changeDate" class="w-100"></ElDatePicker>
+              </ElFormItem>
+            </ElCol>
+            <ElCol :span="16" style="padding: 0 8px">
+              <ElFormItem :label="$t('选择患者')" prop="selectedPatientIds">
+                <ElSelect filterable multiple v-model="reschedulingData.selectedPatientIds" @change="changeAllSelect">
+                  <ElOption value="0">{{ $t('全部') }}</ElOption>
+                  <ElOption v-for="item in patientList" :value="item.Id" :key="item.Id">{{ item.Name }}</ElOption>
+                </ElSelect>
+              </ElFormItem>
+            </ElCol>
+            <ElCol :span="8" style="padding: 0 8px">
+              <ElFormItem :label="$t('班次')">
+                <ElSelect v-model="reschedulingData.Shift">
+                  <ElOption v-for="(option, index) in allShift" :value="option.Name" :key="index">{{ option.Name }}</ElOption>
+                </ElSelect>
+              </ElFormItem>
+            </ElCol>
+            <ElCol :span="8" style="padding: 0 8px">
+              <ElFormItem :label="$t('治疗模式')">
+                <ElSelect v-model="pdData.DialysisType" @change="DialysisTypeMd">
+                  <ElOption v-for="(option, index) in txqDataNew" :value="option.Value" :key="index">{{ option.Name }}</ElOption>
+                </ElSelect>
+              </ElFormItem>
+            </ElCol>
+            <ElCol :span="8" style="padding: 0 8px">
+              <ElFormItem :label="$t('透析器')">
+                <ElSelect v-model="pdData.Dialyzer">
+                  <ElOption v-for="(option, index) in zlmsData" :value="option.Name" :key="index">{{ option.Name }}</ElOption>
+                </ElSelect>
+              </ElFormItem>
+            </ElCol>
+            <ElCol :span="8" style="padding: 0 8px">
+              <ElFormItem :label="$t('灌流器')">
+                <ElSelect v-model="pdData.DialysisPerfusion">
+                  <ElOption v-for="(option, index) in glqDataNew" :value="option.Value" :key="index">{{ option.Name }}</ElOption>
+                </ElSelect>
+              </ElFormItem>
+            </ElCol>
+            <ElCol :span="8" style="padding: 0 8px">
+              <ElFormItem :label="$t('患者类型')">
+                <ElSelect v-model="pdData.PatientType">
+                  <ElOption v-for="(option, index) in PatientTypeList" :value="option.Id" :key="index">{{ option.Name }}</ElOption>
+                </ElSelect>
+              </ElFormItem>
+            </ElCol>
+          </ElForm>
+        </ElRow>
+      </div>
+      <template #footer>
+        <ElButton type="primary" @click="addResetPb" :loading="submitLoading">{{ $t('提交') }}</ElButton>
+        <ElButton @click="reschedulingCancel">{{ $t('取消') }}</ElButton>
+        <ElButton type="danger" style="margin-right: 100px" @click="delPb" v-if="pdData.DialysisPerfusion" :loading="deleteLoading">{{ $t('删除') }}</ElButton>
+      </template>
+    </ElDialog>
+
+    <!-- 耗材剩余情况弹窗 -->
+    <ElDialog :title="patientName" width="1500" v-model="residueModal">
+      <ElTable :columns="columns" :data="tabSingelData" border size="small"></ElTable>
+      <template #footer>
+        <ElButton @click="cancelResidue">{{ $t('取消') }}</ElButton>
       </template>
     </ElDialog>
   </div>
 </template>
 
+<script setup lang="ts">
+import { ref, reactive, computed, onMounted, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { useStore } from 'vuex';
+import {
+  ElButton, ElSelect, ElDatePicker, ElCheckbox, ElDialog, ElForm, ElFormItem,
+  ElOption, ElRow, ElCol, ElTable, ElMessage, ElMessageBox
+} from 'element-plus';
+import type { FormInstance } from 'element-plus';
+import { swsApi } from '#/api';
+import { formatDateString } from '#/utils/format';
+
+// ==================== 类型定义 ====================
+
+interface PatientItem {
+  Id: string;
+  Name: string;
+}
+
+interface ShiftItem {
+  ShiftName: string;
+}
+
+interface DictionaryItem {
+  Id: string;
+  Name: string;
+  Value: string;
+}
+
+interface TableHeadItem {
+  date: string;
+  colspan: number;
+}
+
+interface TableHeadWithShiftItem {
+  date: string;
+  shift: string;
+  index: number;
+}
+
+interface CycleShiftMapItem {
+  dialysisType: string;
+  dialyzer: string;
+}
+
+interface TableBodyItem {
+  No: number;
+  PatientId: string;
+  PatientName: string;
+  cycleShiftMap?: Record<string, CycleShiftMapItem>;
+  [key: string]: any;
+}
+
+interface MultiChangeForm {
+  FieldName: string;
+  PatientIds: string;
+  OldValue: string;
+  NewValue: string;
+  IsAll: number;
+  selectedPatientIds: string[];
+  TimeRange: Date[];
+}
+
+interface PdData {
+  PatientId: string;
+  Shift: string;
+  DialysisType: string;
+  Dialyzer: string;
+  DialysisPerfusion: string;
+  PatientType: string;
+}
+
+interface ReschedulingData {
+  DateList: Date[];
+  selectedPatientIds: string[];
+  Shift: string;
+}
+
+// ==================== Store & Router ====================
+
+const store = useStore();
+const route = useRoute();
+const router = useRouter();
+
+// ==================== 权限按钮 ====================
+
+const HZQD_NEW = ref(true);
+const HZPB_AUTO = ref(true);
+const HZPB_AUTO_P = ref(true);
+const HZPB_DELETE_ALL = ref(true);
+const HZPB_DELETE_P = ref(true);
+
+// ==================== 响应式数据 ====================
+
+const TypeArr = ref<string[]>([]);
+const MaxCount = ref(0);
+const isLoad1 = ref(false);
+const nameVal = ref('name1');
+const shiftDateRange = ref<Date[]>([]);
+const shiftDateRange1 = ref<string[]>([]);
+const shiftHeaderData = ref<any[]>([]);
+const shiftCententData = ref<any[]>([]);
+const options = ref({
+  disabledDate(date: Date) {
+    return date && date.valueOf() < Date.now() - 86400000;
+  }
+});
+const dateRange = ref<Date[]>([]);
+const dateRange1 = ref<string[]>([]);
+const dateArrShow = ref(false);
+const bcAllData = ref<ShiftItem[]>([]);
+const Shift = ref('');
+const headList = ref<any[]>([]);
+const bodyList = ref<any[]>([]);
+const isLoad = ref(true);
+const loadTip = ref('数据查询中，请稍等...');
+const tabData = ref<any[]>([]);
+const tabSingelData = ref<any[]>([]);
+const columns = ref<any[]>([]);
+const patientName = ref('');
+const residueModal = ref(false);
+const tableHeadData = reactive({ c_w1: '' });
+const allShift = ref<ShiftItem[]>([]);
+const reschedulingData = reactive<ReschedulingData>({
+  DateList: [],
+  selectedPatientIds: [],
+  Shift: ''
+});
+const PatientTypeList = ref<DictionaryItem[]>([]);
+const tablebodyData = ref<TableBodyItem[]>([]);
+const zandata = ref<any[]>([]);
+const pbMoadl = ref(false);
+const searchModal = ref(false);
+const submitLoading = ref(false);
+const deleteAllLoading = ref(false);
+const deleteLoading = ref(false);
+const autoLoading = ref(false);
+const searchLoading = ref(false);
+const CycleValue = ref(0);
+const patName = ref('');
+const patDate = ref('');
+const pdData = reactive<PdData>({
+  PatientId: '',
+  Shift: '',
+  DialysisType: '',
+  Dialyzer: '',
+  DialysisPerfusion: '',
+  PatientType: ''
+});
+const now = ref(-1);
+const index = ref(1);
+const onePeopleboData = ref<TableBodyItem | null>(null);
+const bcData = ref<ShiftItem[]>([]);
+const txqDataNew = ref<DictionaryItem[]>([]);
+const zlmsData = ref<any[]>([]);
+const glqDataNew = ref<DictionaryItem[]>([]);
+const searchData = ref<any[]>([]);
+const SearchDate = ref('');
+const sdate = ref<Date | null>(null);
+const myShift = ref(1);
+const options3 = ref({
+  disabledDate(date: Date) {
+    return date && date.valueOf() < Date.now();
+  }
+});
+const loading2 = ref(false);
+const multiChangeModal = ref(false);
+const multiChangeForm = reactive<MultiChangeForm>({
+  FieldName: '',
+  PatientIds: '',
+  OldValue: '',
+  NewValue: '',
+  IsAll: 0,
+  selectedPatientIds: [],
+  TimeRange: []
+});
+const multiChangeFormRef = ref<FormInstance>();
+const multiChangeFormRule = {
+  selectedPatientIds: [
+    { required: true, message: '患者不能为空', trigger: 'change', type: 'array' }
+  ],
+  FieldName: [
+    { required: true, message: '修改类型不能为空', trigger: 'change' }
+  ],
+  OldValue: [
+    { required: true, message: '旧值不能为空', trigger: 'change' }
+  ],
+  NewValue: [
+    { required: true, message: '新值不能为空', trigger: 'change' }
+  ]
+};
+const reschedulingRule = ref({});
+const changeTypeList = ref([
+  { Id: 0, Name: '透析器', Key: 'Dialyzer' },
+  { Id: 1, Name: '灌流器', Key: 'DialysisPerfusion' }
+]);
+const patientList = ref<PatientItem[]>([]);
+const autoChangeList = ref<any[]>([]);
+const multiSaveLoading = ref(false);
+const reschedulingModel = ref(false);
+const TimeRange = ref<Date[]>([]);
+const tongjiData = ref<any[]>([]);
+const isLoadingTJ = ref<any>(null);
+const firstIndex = ref<string>('');
+const lastIndex = ref<string>('');
+const patientInfoSections = ref([
+  { start: 8, end: 14 },
+  { start: 15, end: 21 },
+  { start: 22, end: 28 },
+  { start: 29, end: 35 }
+]);
+const shiftData = ref<any[]>([]);
+const tableHead = ref<TableHeadItem[]>([]);
+const tableHeadWithShift = ref<TableHeadWithShiftItem[]>([]);
+const currentWeekIndex = ref(0);
+const weeks = reactive({
+  tableHead: [] as TableHeadItem[],
+  tableHeadWithShift: [] as TableHeadWithShiftItem[]
+});
+const filterTxqDataNew = ref<DictionaryItem[]>([]);
+const showDialyzer = ref(false);
+
+// ==================== 计算属性 ====================
+
+const SingleId = computed(() => store.getters.SingleId);
+const dialysisColorMap = computed(() => store.getters.dialysisColorMap);
+
+const filterData = computed(() => {
+  if (now.value == -1) {
+    return tablebodyData.value;
+  } else {
+    if (tablebodyData.value.length > 0) {
+      return tablebodyData.value.filter(item => item.PatientId === now.value);
+    } else {
+      return [];
+    }
+  }
+});
+
+// ==================== 方法 ====================
+
+function getMonthsBetweenDates(dateStr1: string, dateStr2: string): number {
+  const date1 = new Date(dateStr1);
+  const date2 = new Date(dateStr2);
+  return (
+    (date2.getFullYear() - date1.getFullYear()) * 12 +
+    (date2.getMonth() - date1.getMonth())
+  );
+}
+
+function getNextMonth(date1: string, months: number): string {
+  const date2 = new Date(date1);
+  date2.setMonth(date2.getMonth() + months);
+  return formatDateString(date2, 'yyyy-MM');
+}
+
+async function loadTj(Id: string) {
+  tongjiData.value = [];
+  if (!zandata.value[0]) return;
+
+  const firstToLastMonth = getMonthsBetweenDates(firstIndex.value, lastIndex.value);
+  const arr: any[] = [];
+  for (let i = 0; i <= firstToLastMonth; i++) {
+    const mouth = getNextMonth(firstIndex.value, i);
+    const Sjson = {
+      MouthDate: mouth,
+      PatientId: Id
+    };
+    const response = await swsApi.swsGet('SchedulingManage/4018', Sjson);
+    if (response.Code == 200) {
+      const obj: any = {};
+      obj[`${parseInt(mouth.substr(-2))}`] = response.Data.Dic;
+      arr.push(obj);
+    }
+  }
+  tongjiData.value = [...new Set([...arr])];
+}
+
+function queryList() {
+  dateArrShow.value = true;
+  dateRange.value = setDefaultDateRange();
+  dateRange1.value = JSON.parse(JSON.stringify(dateRange.value));
+  shiftDateRange.value = setDefaultDateRange();
+  shiftDateRange1.value = JSON.parse(JSON.stringify(dateRange.value));
+  changeTab('name1');
+}
+
+function changeTab(val: string) {
+  nameVal.value = val;
+  if (val == 'name1') {
+    getWeekData();
+  } else {
+    getShitAllData();
+  }
+}
+
+function changeDateArr1(val: Date[]) {
+  shiftDateRange.value = val;
+  shiftDateRange1.value = val.map(d => formatDateString(d, 'yyyy-MM-dd'));
+  getShitAllData();
+}
+
+function changeDateArr(val: Date[]) {
+  dateRange.value = val;
+  dateRange1.value = val.map(d => formatDateString(d, 'yyyy-MM-dd'));
+  getWeekData();
+}
+
+function setDefaultDateRange(): Date[] {
+  const today = new Date();
+  const dayOfWeek = today.getDay();
+  const monday = new Date(today);
+  monday.setDate(monday.getDate() - dayOfWeek + 1);
+  const sunday = new Date(monday);
+  sunday.setDate(sunday.getDate() + 6);
+  return [monday, sunday];
+}
+
+function changeShift() {
+  if (nameVal.value == 'name1') {
+    getWeekData();
+  } else {
+    getShitAllData();
+  }
+}
+
+async function getWeekData() {
+  if (!dateRange1.value[0]) {
+    ElMessage.warning('请选择时间段后查询！');
+    return;
+  }
+  const jsonStr = {
+    StartDate: dateRange1.value[0],
+    EndDate: dateRange1.value[1],
+    Shift: Shift.value
+  };
+  headList.value = [];
+  bodyList.value = [];
+  loadTip.value = '数据查询中，请稍等...';
+  const res = await swsApi.swsGet('SchedulingManage/4026', jsonStr);
+  if (res.Code == 200) {
+    isLoad.value = false;
+    headList.value = res.Data.HeaderList;
+    bodyList.value = res.Data.DataList;
+  } else {
+    isLoad.value = true;
+    loadTip.value = '查询无数据';
+  }
+}
+
+async function getShitAllData() {
+  const jsonStr = {
+    StartDate: shiftDateRange1.value[0],
+    EndDate: shiftDateRange1.value[1],
+    Shift: Shift.value
+  };
+  const res = await swsApi.swsGet('SchedulingManage/4028', jsonStr);
+  if (res.Code == 200) {
+    shiftHeaderData.value = res.Data.HeaderList;
+    const arr = res.Data.DataList;
+    const maxLength = Math.max(...arr.map((item: any) => item.ActualShifts.length));
+    const tableData = [];
+    for (let i = 0; i < maxLength; i++) {
+      const group = arr.map((day: any) => {
+        if (i < day.ActualShifts.length) {
+          return day.ActualShifts[i];
+        } else {
+          return {
+            PatientName: '',
+            ActualDialysisType: '',
+            ActualDialyzer: '',
+            ActualDialysisPerfusion: '',
+            Anticoagulants: '',
+            AnticoagulantsDose: null,
+            AnticoagulantsUnit: '',
+            PatientCardNum: '',
+            PatientId: ''
+          };
+        }
+      });
+      tableData.push(group);
+    }
+    shiftCententData.value = tableData;
+    MaxCount.value = res.Data.MaxCount;
+  } else {
+    shiftHeaderData.value = [];
+    shiftCententData.value = [];
+    MaxCount.value = 0;
+  }
+}
+
+function cancelResidue() {
+  residueModal.value = false;
+  tabSingelData.value = [];
+}
+
+function changeDate(e: string) {
+  reschedulingData.DateList = e.split(',').map(d => new Date(d));
+}
+
+function reschedulingCancel() {
+  reschedulingModel.value = false;
+}
+
+function lookResidue() {
+  tabSingelData.value = [];
+  patientName.value = filterData.value[0]?.PatientName + '的耗材剩余情况';
+  tabData.value.forEach((item) => {
+    if (item.PatientName == filterData.value[0]?.PatientName) {
+      tabSingelData.value.push(item);
+    }
+  });
+  residueModal.value = true;
+}
+
+async function getAllResidue() {
+  const json = { EndDate: null };
+  const res = await swsApi.swsGet('BookkeepingManagement/4008', json);
+  if (res.Code == 200) {
+    columns.value = res.Data.Header;
+    for (const i in columns.value) {
+      columns.value[i].align = 'center';
+      if (i == '0') {
+        columns.value[i].width = 100;
+        columns.value[i].fixed = 'left';
+      }
+    }
+  }
+}
+
+function exportTable() {
+  ElMessage.info('导出功能开发中...');
+}
+
+function autoPb() {
+  ElMessage.info('自动排班功能开发中...');
+}
+
+function autoSinglePb() {
+  ElMessage.info('个人排班功能开发中...');
+}
+
+function deleteData() {
+  ElMessageBox.confirm('确定要删除排班吗？', '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(() => {
+    ElMessage.success('删除成功');
+  });
+}
+
+function querySign() {
+  ElMessage.info('生成签到表功能开发中...');
+}
+
+function goBed() {
+  router.push('/dialysis/bed');
+}
+
+function selectSearchDate(val: Date) {
+  sdate.value = val;
+}
+
+function searchSch() {
+  ElMessage.info('查询功能开发中...');
+}
+
+function clickPat(PatientId: string) {
+  store.commit('setSingleId', PatientId);
+}
+
+function pbTdstatus(val: string): number {
+  if (!val) return 0;
+  return 1;
+}
+
+function getFormatTdDialysisType(item: any, key: string): string {
+  if (item.cycleShiftMap && item.cycleShiftMap[key]) {
+    return item.cycleShiftMap[key].dialysisType;
+  }
+  return '';
+}
+
+function onClickPatientShift(item: TableBodyItem, index: number, shift: string) {
+  patName.value = item.PatientName;
+  pdData.PatientId = item.PatientId;
+  pbMoadl.value = true;
+}
+
+function changeMultiType() {
+  // 修改类型变更
+}
+
+function changeHospitals() {
+  // 选择患者变更
+}
+
+function changeTimeRange() {
+  // 时间段变更
+}
+
+function changeAllSelect() {
+  // 全选变更
+}
+
+function DialysisTypeMd() {
+  // 治疗模式变更
+}
+
+async function addPb() {
+  submitLoading.value = true;
+  try {
+    const params = {
+      PatientId: pdData.PatientId,
+      Shift: pdData.Shift,
+      DialysisType: pdData.DialysisType,
+      Dialyzer: pdData.Dialyzer,
+      DialysisPerfusion: pdData.DialysisPerfusion,
+      PatientType: pdData.PatientType
+    };
+    const res = await swsApi.swsPost('SchedulingManage/4001', params);
+    if (res.Code == 200) {
+      ElMessage.success(res.Msg || '排班成功');
+      pbMoadl.value = false;
+      load();
+    } else {
+      ElMessage.error(res.Msg || '排班失败');
+    }
+  } finally {
+    submitLoading.value = false;
+  }
+}
+
+async function delPb() {
+  deleteLoading.value = true;
+  try {
+    const params = {
+      PatientId: pdData.PatientId,
+      Date: patDate.value,
+      Shift: pdData.Shift
+    };
+    const res = await swsApi.swsDelete('SchedulingManage/4003', params);
+    if (res.Code == 200) {
+      ElMessage.success(res.Msg || '删除成功');
+      pbMoadl.value = false;
+      load();
+    } else {
+      ElMessage.error(res.Msg || '删除失败');
+    }
+  } finally {
+    deleteLoading.value = false;
+  }
+}
+
+async function addResetPb() {
+  submitLoading.value = true;
+  try {
+    const params = {
+      PatientIds: reschedulingData.selectedPatientIds.join(','),
+      DateList: reschedulingData.DateList.map(d => formatDateString(d, 'yyyy-MM-dd')),
+      Shift: reschedulingData.Shift,
+      DialysisType: pdData.DialysisType,
+      Dialyzer: pdData.Dialyzer,
+      DialysisPerfusion: pdData.DialysisPerfusion,
+      PatientType: pdData.PatientType
+    };
+    const res = await swsApi.swsPost('SchedulingManage/4002', params);
+    if (res.Code == 200) {
+      ElMessage.success(res.Msg || '重新排班成功');
+      reschedulingModel.value = false;
+      load();
+    } else {
+      ElMessage.error(res.Msg || '重新排班失败');
+    }
+  } finally {
+    submitLoading.value = false;
+  }
+}
+
+async function multiChangeDialysis() {
+  multiSaveLoading.value = true;
+  try {
+    const params = {
+      FieldName: multiChangeForm.FieldName,
+      PatientIds: multiChangeForm.selectedPatientIds.join(','),
+      OldValue: multiChangeForm.OldValue,
+      NewValue: multiChangeForm.NewValue,
+      IsAll: multiChangeForm.IsAll,
+      StartDate: multiChangeForm.TimeRange[0] ? formatDateString(multiChangeForm.TimeRange[0], 'yyyy-MM-dd') : '',
+      EndDate: multiChangeForm.TimeRange[1] ? formatDateString(multiChangeForm.TimeRange[1], 'yyyy-MM-dd') : ''
+    };
+    const res = await swsApi.swsPut('SchedulingManage/3011', params);
+    if (res.Code == 200) {
+      ElMessage.success(res.Msg || '批量修改成功');
+      multiChangeModal.value = false;
+      load();
+    } else {
+      ElMessage.error(res.Msg || '批量修改失败');
+    }
+  } finally {
+    multiSaveLoading.value = false;
+  }
+}
+
+function loadDataPrev() {
+  CycleValue.value--;
+  load();
+}
+
+function loadDataNext() {
+  CycleValue.value++;
+  load();
+}
+
+async function load() {
+  // 加载排班数据
+  const res = await swsApi.swsGet('SchedulingManage/4017', {
+    Date: formatDateString(new Date(), 'yyyy-MM-dd'),
+    Shift: '',
+    PatientType: '',
+    TreatmentRegion: '',
+    OrderType: 1
+  });
+  if (res.Code == 200) {
+    tablebodyData.value = res.Data;
+  }
+}
+
+async function publicMd() {
+  // 获取公共数据
+  const res = await swsApi.swsGet('SystemDictionary/4006', [
+    { typeId: 'bd1716eacc88465588324b680fcf7570' },
+    { typeId: '9364d9b7b019426a96c61822adcecdeb' }
+  ]);
+  if (res.Code == 200) {
+    txqDataNew.value = res.Data[1].SystemDictionaryList;
+    filterTxqDataNew.value = res.Data[1].SystemDictionaryList;
+  }
+}
+
+async function loadDictionary() {
+  // 加载字典数据
+  const res = await swsApi.swsGet('PatientShiftSet/4002', {
+    Date: formatDateString(new Date(), 'yyyy-MM-dd')
+  });
+  if (res.Code == 200) {
+    bcData.value = res.Data;
+    allShift.value = res.Data;
+  }
+}
+
+// ==================== 生命周期 ====================
+
+onMounted(() => {
+  load();
+  publicMd();
+  loadDictionary();
+  getAllResidue();
+});
+
+watch(() => route.name, (newRoute) => {
+  if (newRoute == 'patients_scheduling') {
+    load();
+    now.value = store.state.app.SingleId;
+  }
+});
+
+watch(now, (newVal, oldVal) => {
+  if (newVal !== -1 && newVal !== oldVal) {
+    loadTj(String(newVal));
+  }
+});
+
+watch(SingleId, (val) => {
+  now.value = val;
+}, { immediate: true });
+</script>
+
 <style scoped>
-.cycle-scheduling-tab {
-  padding: 0;
+.paibanx {
+  padding: 16px;
 }
 
-.toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.toolbar-left {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.toolbar-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.pagination-wrapper {
-  display: flex;
-  justify-content: flex-end;
+.ftablex {
   margin-top: 16px;
+  overflow: auto;
+}
+
+.ftablex table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ftablex th,
+.ftablex td {
+  border: 1px solid #e9eaec;
+  padding: 8px;
+  text-align: center;
+}
+
+.ftablex th {
+  background-color: #f8f8f9;
+  font-weight: bold;
+}
+
+.ftablex .disabledTd {
+  background-color: #f4f4f4;
+  cursor: not-allowed;
+}
+
+.tabled {
+  table-layout: fixed;
+}
+
+.tabled.single {
+  width: auto;
+}
+
+.thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.test1, .test2 {
+  position: sticky;
+  left: 0;
+  background-color: #f8f8f9;
+  z-index: 2;
+}
+
+.test1 {
+  width: 40px;
+}
+
+.test2 {
+  width: 80px;
 }
 </style>
