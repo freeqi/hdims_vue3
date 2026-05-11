@@ -25,7 +25,8 @@
     "recordEdit": "编辑透析记录",
     "schedule": "透析排班",
     "monitoring": "透析监控",
-    "bed": "床位管理"
+    "bed": "床位管理",
+    "orders": "开立医嘱"
   },
   "medical": {
     "title": "医疗文书",

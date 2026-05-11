@@ -1,6 +1,6 @@
 /**
  * 该文件根据血透系统业务逻辑进行调整
- * 直接请求后端地址，不走 Vite 代理
+ * 使用 Vite 代理转发请求到后端
  */
 import type { RequestClientOptions } from '@vben/request';
 
@@ -13,8 +13,9 @@ import { ElMessage } from 'element-plus';
 
 import { useAuthStore } from '#/store';
 
-// 直接请求后端地址
-const apiURL = 'http://online.swskj.com:8080';
+// 使用相对路径，通过 Vite 代理转发
+// 代理配置在 vite.config.ts 中
+const apiURL = '/api';
 
 function createRequestClient(baseURL: string, options?: RequestClientOptions) {
   const client = new RequestClient({

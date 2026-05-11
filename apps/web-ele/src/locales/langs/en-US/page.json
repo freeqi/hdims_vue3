@@ -11,5 +11,48 @@
     "title": "Dashboard",
     "analytics": "Analytics",
     "workspace": "Workspace"
+  },
+  "patient": {
+    "title": "Patient Management",
+    "list": "Patient List",
+    "info": "Patient Info",
+    "archive": "Patient Archive"
+  },
+  "dialysis": {
+    "title": "Dialysis Management",
+    "record": "Dialysis Record",
+    "recordEdit": "Edit Dialysis Record",
+    "schedule": "Dialysis Schedule",
+    "monitoring": "Dialysis Monitoring",
+    "bed": "Bed Management",
+    "orders": "Orders"
+  },
+  "medical": {
+    "title": "Medical Records",
+    "record": "Medical Record",
+    "nursing": "Nursing Record",
+    "assessment": "Assessment Form",
+    "order": "Order Management"
+  },
+  "device": {
+    "title": "Device Management",
+    "monitor": "Device Monitor",
+    "list": "Device List",
+    "quality": "Quality Control",
+    "consumable": "Consumables"
+  },
+  "operation": {
+    "title": "Operations",
+    "schedule": "Schedule",
+    "statistics": "Statistics",
+    "report": "Reports"
+  },
+  "system": {
+    "title": "System Management",
+    "user": "User Management",
+    "role": "Role Management",
+    "permission": "Permission",
+    "parameter": "Parameters",
+    "log": "Audit Log"
   }
 }

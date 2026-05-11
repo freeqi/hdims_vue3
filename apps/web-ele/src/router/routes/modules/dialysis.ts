@@ -57,6 +57,15 @@ const routes: RouteRecordRaw[] = [
           title: $t('page.dialysis.bed'),
         },
       },
+      {
+        name: 'DialysisOrders',
+        path: '/dialysis/orders',
+        component: () => import('#/views/dialysis/monitoring/orders.vue'),
+        meta: {
+          icon: 'lucide:file-text',
+          title: $t('page.dialysis.orders'),
+        },
+      },
     ],
   },
 ];
