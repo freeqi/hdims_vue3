@@ -1,0 +1,58 @@
+{
+  "auth": {
+    "login": "登录",
+    "register": "注册",
+    "codeLogin": "验证码登录",
+    "qrcodeLogin": "二维码登录",
+    "forgetPassword": "忘记密码",
+    "profile": "个人中心"
+  },
+  "dashboard": {
+    "title": "概览",
+    "analytics": "分析页",
+    "workspace": "工作台"
+  },
+  "patient": {
+    "title": "患者管理",
+    "list": "患者列表",
+    "detail": "患者详情",
+    "edit": "编辑患者",
+    "archive": "患者档案"
+  },
+  "dialysis": {
+    "title": "透析管理",
+    "record": "透析记录",
+    "recordEdit": "编辑透析记录",
+    "schedule": "透析排班",
+    "monitoring": "透析监控",
+    "bed": "床位管理"
+  },
+  "medical": {
+    "title": "医疗文书",
+    "record": "病历管理",
+    "nursing": "护理记录",
+    "assessment": "评估表单",
+    "order": "医嘱管理"
+  },
+  "device": {
+    "title": "设备管理",
+    "monitor": "设备监控",
+    "list": "设备台账",
+    "quality": "质控管理",
+    "consumable": "耗材管理"
+  },
+  "operation": {
+    "title": "运营管理",
+    "schedule": "排班管理",
+    "statistics": "统计分析",
+    "report": "报表中心"
+  },
+  "system": {
+    "title": "系统管理",
+    "user": "用户管理",
+    "role": "角色管理",
+    "permission": "权限管理",
+    "parameter": "参数配置",
+    "log": "日志审计"
+  }
+}
