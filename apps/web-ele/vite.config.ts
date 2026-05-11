@@ -15,9 +15,9 @@ export default defineConfig(async () => {
         proxy: {
           '/api': {
             changeOrigin: true,
-            rewrite: (path) => path.replace(/^\/api/, ''),
-            // mock代理目标地址
-            target: 'http://localhost:5320/api',
+            rewrite: (path) => path.replace(/^\/api/, '/api'),
+            // 血透系统线上后端地址
+            target: 'http://online.swskj.com:8080',
             ws: true,
           },
         },
