@@ -59,6 +59,7 @@ export namespace AuthApi {
 /**
  * 获取机构信息 - 登录前必须先调用
  * 原系统接口: GET /api/v1/Open/4003
+ * 注意：此接口也需要包含 Account|Token|ClientType 请求头（即使为空）
  */
 export async function getOrganizationApi() {
   const response = await axios.get<AuthApi.OrganizationResult>(
@@ -66,6 +67,8 @@ export async function getOrganizationApi() {
     {
       headers: {
         'Content-Type': 'application/json',
+        Account: '', // 必须包含，即使为空
+        Token: '',   // 必须包含，即使为空
         ClientType: 'PC',
       },
     },
