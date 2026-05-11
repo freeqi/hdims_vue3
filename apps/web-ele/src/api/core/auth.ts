@@ -1,6 +1,9 @@
 import axios from 'axios';
 import { aesEncrypt } from '#/utils/aes';
 
+// 后端服务器地址（用于设置 Host 请求头）
+const BACKEND_HOST = 'online.swskj.com';
+
 export namespace AuthApi {
   /** 登录接口参数 */
   export interface LoginParams {
@@ -68,8 +71,9 @@ export async function getOrganizationApi() {
       headers: {
         'Content-Type': 'application/json',
         Account: '', // 必须包含，即使为空
-        Token: '',   // 必须包含，即使为空
+        Token: '', // 必须包含，即使为空
         ClientType: 'PC',
+        Host: BACKEND_HOST, // 覆盖代理默认的 localhost Host 头
       },
     },
   );
@@ -124,6 +128,7 @@ export async function loginApi(data: AuthApi.LoginParams) {
         OrgId: orgId,
         OrgAuthCode: orgAuthCode,
         Department: empDepartment,
+        Host: BACKEND_HOST, // 覆盖代理默认的 localhost Host 头
       },
     },
   );
@@ -177,16 +182,21 @@ export async function logoutApi() {
   if (userName) {
     try {
       const jmaccount = aesEncrypt(userName);
-      await axios.post(`/api/v1/Account/LogoutToken/${jmaccount}`, null, {
-        headers: {
-          Account: encodeURIComponent(userName),
-          Token: token,
-          ClientType: 'PC',
-          OrgId: orgId,
-          OrgAuthCode: orgAuthCode,
-          Department: empDepartment,
+      await axios.post(
+        `/api/v1/Account/LogoutToken/${jmaccount}`,
+        null,
+        {
+          headers: {
+            Account: encodeURIComponent(userName),
+            Token: token,
+            ClientType: 'PC',
+            OrgId: orgId,
+            OrgAuthCode: orgAuthCode,
+            Department: empDepartment,
+            Host: BACKEND_HOST, // 覆盖代理默认的 localhost Host 头
+          },
         },
-      });
+      );
     } catch {
       // ignore
     }
