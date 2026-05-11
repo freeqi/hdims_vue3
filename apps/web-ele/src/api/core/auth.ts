@@ -43,12 +43,15 @@ export async function loginApi(data: AuthApi.LoginParams) {
   const jmpwd = aesEncrypt(data.password?.trim() || '');
 
   // 直接通过Vite代理发送请求
+  // 注意：后端要求请求头必须包含 Account|Token|ClientType
   const response = await axios.post<AuthApi.OriginalLoginResult>(
     `/api/v1/Account/LoginToken/${jmaccount}/${jmpwd}`,
     null,
     {
       headers: {
         'Content-Type': 'application/json',
+        Account: encodeURIComponent(data.username?.trim() || ''),
+        Token: '', // 登录时Token为空
         ClientType: 'PC',
       },
     },
@@ -95,10 +98,17 @@ export async function getUserInfoApi() {
  */
 export async function logoutApi() {
   const userName = sessionStorage.getItem('hdUserName');
+  const token = sessionStorage.getItem('hdToken') || '';
   if (userName) {
     try {
       const jmaccount = aesEncrypt(userName);
-      await axios.post(`/api/v1/Account/LogoutToken/${jmaccount}`);
+      await axios.post(`/api/v1/Account/LogoutToken/${jmaccount}`, null, {
+        headers: {
+          Account: encodeURIComponent(userName),
+          Token: token,
+          ClientType: 'PC',
+        },
+      });
     } catch {
       // ignore
     }

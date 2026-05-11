@@ -31,12 +31,9 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
       const employeeId = sessionStorage.getItem('hdEmployeeId');
 
       // 使用原系统的请求头格式
-      if (token) {
-        config.headers.Token = token;
-      }
-      if (userName) {
-        config.headers.Account = encodeURIComponent(userName) + (employeeId ? `|${employeeId}` : '');
-      }
+      // 注意：后端要求请求头必须包含 Account|Token|ClientType
+      config.headers.Token = token || '';
+      config.headers.Account = userName ? encodeURIComponent(userName) + (employeeId ? `|${employeeId}` : '') : '';
       config.headers.ClientType = 'PC';
       config.headers['Content-Type'] = 'application/json; charset=utf-8';
 
@@ -82,4 +79,7 @@ export const requestClient = createRequestClient(apiURL, {
   responseReturn: 'data',
 });
 
-export const baseRequestClient = new RequestClient({ baseURL: apiURL });
+// baseRequestClient 也需要相同的拦截器配置
+export const baseRequestClient = createRequestClient(apiURL, {
+  responseReturn: 'raw',
+});
