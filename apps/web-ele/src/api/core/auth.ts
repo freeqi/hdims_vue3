@@ -2,7 +2,7 @@ import axios from 'axios';
 import { aesEncrypt } from '#/utils/aes';
 
 // 后端服务器地址（用于设置 Host 请求头）
-const BACKEND_HOST = 'online.swskj.com';
+const BACKEND_HOST = 'http://online.swskj.com:8080';
 
 export namespace AuthApi {
   /** 登录接口参数 */
@@ -66,12 +66,12 @@ export namespace AuthApi {
  */
 export async function getOrganizationApi() {
   const response = await axios.get<AuthApi.OrganizationResult>(
-    '/api/v1/Open/4003',
+    `${BACKEND_HOST}/api/v1/Open/4003`,
     {
       headers: {
         'Content-Type': 'application/json',
-        Account: '', // 必须包含，即使为空
-        Token: '', // 必须包含，即使为空
+        Account: 'null|null', // 必须包含，即使为空
+        Token: 'null', // 必须包含，即使为空
         ClientType: 'PC',
         Host: BACKEND_HOST, // 覆盖代理默认的 localhost Host 头
       },
@@ -117,13 +117,13 @@ export async function loginApi(data: AuthApi.LoginParams) {
 
   // 直接通过Vite代理发送请求
   const response = await axios.post<AuthApi.OriginalLoginResult>(
-    `/api/v1/Account/LoginToken/${jmaccount}/${jmpwd}`,
+    `${BACKEND_HOST}/api/v1/Account/LoginToken/${jmaccount}/${jmpwd}`,
     null,
     {
       headers: {
         'Content-Type': 'application/json',
-        Account: encodeURIComponent(data.username?.trim() || ''),
-        Token: '', // 登录时Token为空
+        Account: 'null|null',
+        Token: 'null', // 登录时Token为空
         ClientType: 'PC',
         OrgId: orgId,
         OrgAuthCode: orgAuthCode,
