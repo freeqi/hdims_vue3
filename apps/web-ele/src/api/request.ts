@@ -29,12 +29,20 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
       const token = sessionStorage.getItem('hdToken');
       const userName = sessionStorage.getItem('hdUserName');
       const employeeId = sessionStorage.getItem('hdEmployeeId');
+      const orgId = sessionStorage.getItem('hdOrgId');
+      const orgAuthCode = sessionStorage.getItem('hdOrgAuthCode');
+      const empDepartment = sessionStorage.getItem('hdEmpDepartment');
 
       // 使用原系统的请求头格式
-      // 注意：后端要求请求头必须包含 Account|Token|ClientType
+      // 注意：后端要求请求头必须包含 Account|Token|ClientType|OrgId|OrgAuthCode|Department
       config.headers.Token = token || '';
-      config.headers.Account = userName ? encodeURIComponent(userName) + (employeeId ? `|${employeeId}` : '') : '';
+      config.headers.Account = userName
+        ? encodeURIComponent(userName) + (employeeId ? `|${employeeId}` : '')
+        : '';
       config.headers.ClientType = 'PC';
+      config.headers.OrgId = orgId || '';
+      config.headers.OrgAuthCode = orgAuthCode || '';
+      config.headers.Department = empDepartment || '';
       config.headers['Content-Type'] = 'application/json; charset=utf-8';
 
       return config;

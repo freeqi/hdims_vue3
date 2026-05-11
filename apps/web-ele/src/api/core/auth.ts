@@ -1,5 +1,4 @@
 import axios from 'axios';
-import { baseRequestClient } from '#/api/request';
 import { aesEncrypt } from '#/utils/aes';
 
 export namespace AuthApi {
@@ -30,11 +29,73 @@ export namespace AuthApi {
     };
     Msg: string;
   }
+
+  /** 机构信息返回值 */
+  export interface OrganizationResult {
+    Code: number;
+    Data: {
+      OrganizationInfo: {
+        Id: string;
+        Name: string;
+        NameUS: string;
+        OrgAuthCode: string;
+        MedicalCardBindingIP: string;
+        LoginBackgroundImage: string;
+        LoginIcon: string;
+      };
+      OrgDepartment: Array<{
+        Id: string;
+        Name: string;
+      }>;
+      MachineCode: string;
+      AuthorizeInfo: {
+        AuthStatus: boolean;
+      };
+    };
+    Msg: string;
+  }
+}
+
+/**
+ * 获取机构信息 - 登录前必须先调用
+ * 原系统接口: GET /api/v1/Open/4003
+ */
+export async function getOrganizationApi() {
+  const response = await axios.get<AuthApi.OrganizationResult>(
+    '/api/v1/Open/4003',
+    {
+      headers: {
+        'Content-Type': 'application/json',
+        ClientType: 'PC',
+      },
+    },
+  );
+
+  const resp = response.data;
+
+  if (resp.Code === 200) {
+    const { OrganizationInfo, OrgDepartment, MachineCode } = resp.Data;
+
+    // 存储机构信息到 sessionStorage
+    sessionStorage.setItem('hdOrgId', OrganizationInfo.Id);
+    sessionStorage.setItem('hdOrgAuthCode', OrganizationInfo.OrgAuthCode);
+    sessionStorage.setItem('hdMachineCode', MachineCode);
+    sessionStorage.setItem('hdAgyName', OrganizationInfo.Name);
+    sessionStorage.setItem('hdYqArr', JSON.stringify(OrgDepartment));
+
+    // 如果只有一个院区，自动选择
+    if (OrgDepartment.length === 1) {
+      sessionStorage.setItem('hdEmpDepartment', OrgDepartment[0].Id);
+    }
+
+    return resp.Data;
+  }
+
+  throw new Error(resp.Msg || '获取机构信息失败');
 }
 
 /**
  * 登录 - 对接原血透系统
- * 直接使用 axios 发送请求，绕过 Vben 请求封装
  * 原系统接口: POST /api/v1/Account/LoginToken/{加密账号}/{加密密码}
  */
 export async function loginApi(data: AuthApi.LoginParams) {
@@ -42,8 +103,12 @@ export async function loginApi(data: AuthApi.LoginParams) {
   const jmaccount = aesEncrypt(data.username?.trim() || '');
   const jmpwd = aesEncrypt(data.password?.trim() || '');
 
+  // 从 sessionStorage 获取机构信息
+  const orgId = sessionStorage.getItem('hdOrgId') || '';
+  const orgAuthCode = sessionStorage.getItem('hdOrgAuthCode') || '';
+  const empDepartment = sessionStorage.getItem('hdEmpDepartment') || '';
+
   // 直接通过Vite代理发送请求
-  // 注意：后端要求请求头必须包含 Account|Token|ClientType
   const response = await axios.post<AuthApi.OriginalLoginResult>(
     `/api/v1/Account/LoginToken/${jmaccount}/${jmpwd}`,
     null,
@@ -53,6 +118,9 @@ export async function loginApi(data: AuthApi.LoginParams) {
         Account: encodeURIComponent(data.username?.trim() || ''),
         Token: '', // 登录时Token为空
         ClientType: 'PC',
+        OrgId: orgId,
+        OrgAuthCode: orgAuthCode,
+        Department: empDepartment,
       },
     },
   );
@@ -99,6 +167,10 @@ export async function getUserInfoApi() {
 export async function logoutApi() {
   const userName = sessionStorage.getItem('hdUserName');
   const token = sessionStorage.getItem('hdToken') || '';
+  const orgId = sessionStorage.getItem('hdOrgId') || '';
+  const orgAuthCode = sessionStorage.getItem('hdOrgAuthCode') || '';
+  const empDepartment = sessionStorage.getItem('hdEmpDepartment') || '';
+
   if (userName) {
     try {
       const jmaccount = aesEncrypt(userName);
@@ -107,6 +179,9 @@ export async function logoutApi() {
           Account: encodeURIComponent(userName),
           Token: token,
           ClientType: 'PC',
+          OrgId: orgId,
+          OrgAuthCode: orgAuthCode,
+          Department: empDepartment,
         },
       });
     } catch {

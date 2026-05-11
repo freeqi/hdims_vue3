@@ -10,7 +10,13 @@ import { resetAllStores, useAccessStore, useUserStore } from '@vben/stores';
 import { ElMessage, ElNotification } from 'element-plus';
 import { defineStore } from 'pinia';
 
-import { getAccessCodesApi, getUserInfoApi, loginApi, logoutApi } from '#/api';
+import {
+  getAccessCodesApi,
+  getOrganizationApi,
+  getUserInfoApi,
+  loginApi,
+  logoutApi,
+} from '#/api';
 import { $t } from '#/locales';
 
 export const useAuthStore = defineStore('auth', () => {
@@ -19,6 +25,22 @@ export const useAuthStore = defineStore('auth', () => {
   const router = useRouter();
 
   const loginLoading = ref(false);
+  // 机构信息（院区列表等）
+  const organization = ref<any>(null);
+
+  /**
+   * 获取机构信息 - 登录前必须先调用
+   */
+  async function fetchOrganization() {
+    try {
+      const orgData = await getOrganizationApi();
+      organization.value = orgData;
+      return orgData;
+    } catch (error: any) {
+      ElMessage.error(error?.message || '获取机构信息失败');
+      throw error;
+    }
+  }
 
   /**
    * 异步处理登录操作 - 对接原血透系统
@@ -31,7 +53,12 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       loginLoading.value = true;
 
-      // 调用原系统登录接口
+      // 1. 先获取机构信息（如果还没有获取）
+      if (!organization.value) {
+        await fetchOrganization();
+      }
+
+      // 2. 调用原系统登录接口
       const loginResult: any = await loginApi(params);
       const { accessToken, userData } = loginResult;
 
@@ -41,20 +68,26 @@ export const useAuthStore = defineStore('auth', () => {
 
         // 将原系统用户数据存入sessionStorage（兼容原系统请求头）
         sessionStorage.setItem('hdToken', userData.Token || accessToken);
-        sessionStorage.setItem('hdUserName', userData.account || params.username || '');
+        sessionStorage.setItem(
+          'hdUserName',
+          userData.account || params.username || '',
+        );
         sessionStorage.setItem('hdEmployeeId', userData.employeeId || '');
         sessionStorage.setItem('hdNickName', userData.name || params.username || '');
 
         // 存储完整用户信息
-        sessionStorage.setItem('hdUserInfo', JSON.stringify({
-          userId: '1',
-          username: userData.account || params.username || '',
-          realName: userData.name || params.username || '',
-          avatar: '',
-          desc: '血透系统管理员',
-          homePath: '/patient/list',
-          roles: ['admin'],
-        }));
+        sessionStorage.setItem(
+          'hdUserInfo',
+          JSON.stringify({
+            userId: '1',
+            username: userData.account || params.username || '',
+            realName: userData.name || params.username || '',
+            avatar: '',
+            desc: '血透系统管理员',
+            homePath: '/patient/list',
+            roles: ['admin'],
+          }),
+        );
 
         // 存储菜单和权限（原系统格式）
         if (userData.Menu) {
@@ -117,6 +150,15 @@ export const useAuthStore = defineStore('auth', () => {
     sessionStorage.removeItem('hdUserInfo');
     sessionStorage.removeItem('hdMenu');
     sessionStorage.removeItem('hdPerm');
+    sessionStorage.removeItem('hdOrgId');
+    sessionStorage.removeItem('hdOrgAuthCode');
+    sessionStorage.removeItem('hdMachineCode');
+    sessionStorage.removeItem('hdAgyName');
+    sessionStorage.removeItem('hdYqArr');
+    sessionStorage.removeItem('hdEmpDepartment');
+
+    // 重置机构信息
+    organization.value = null;
 
     resetAllStores();
     accessStore.setLoginExpired(false);
@@ -144,8 +186,10 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     $reset,
     authLogin,
+    fetchOrganization,
     fetchUserInfo,
     loginLoading,
     logout,
+    organization,
   };
 });
