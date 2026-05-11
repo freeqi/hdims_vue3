@@ -15,82 +15,119 @@ import {
   ElFormItem,
   ElCollapse,
   ElCollapseItem,
-  ElDivider,
   ElMessage,
-  ElDescriptions,
-  ElDescriptionsItem,
+  ElMessageBox,
 } from 'element-plus';
 import type { FormInstance } from 'element-plus';
+import { swsApi } from '#/api';
 
 // ==================== 类型定义 ====================
 
 /** 已签到患者 */
 interface SignedPatient {
-  patientId: string;
-  patientName: string;
-  gender: string;
-  age: number;
-  bedNo: string;
-  treatmentMode: string;
-  dialyzer: string;
-  bloodInfectious: string;
-  shift: string;
+  PatientId: string;
+  PatientName: string;
+  Gender: string;
+  Age: number;
+  BedNo: string;
+  TreatmentMode: string;
+  Dialyzer: string;
+  BloodInfectious: string;
+  Shift: string;
 }
 
 /** 过敏记录 */
 interface AllergyRecord {
-  allergyId: string;
-  allergen: string;
-  allergyType: string;
-  severity: string;
-  reaction: string;
-  discoverDate: string;
+  AllergyId: string;
+  Allergen: string;
+  AllergyType: string;
+  Severity: string;
+  Reaction: string;
+  DiscoverDate: string;
 }
 
 /** 诊断信息 */
 interface DiagnosisInfo {
-  diagnosisId: string;
-  diagnosisName: string;
-  diagnosisCode: string;
-  diagnosisType: string;
-  diagnosisDate: string;
-  isPrimary: boolean;
+  DiagnosisId: string;
+  DiagnosisName: string;
+  DiagnosisCode: string;
+  DiagnosisType: string;
+  DiagnosisDate: string;
+  IsPrimary: boolean;
 }
 
-/** 用药方案（医嘱） */
-interface MedicationOrder {
-  orderId: string;
-  category: string;
-  content: string;
-  drugName: string;
-  dosage: string;
-  frequency: string;
-  usage: string;
-  remark: string;
-  doctor: string;
-  orderTime: string;
-  orderType: string;
+/** 医嘱项目 */
+interface OrderItem {
+  Id: string;
+  OrderId: string;
+  OrderName: string;
+  OrderType: string;
+  OrderStatus: string;
+  OrderTime: string;
+  Category: string;
+  Content: string;
+  DrugName: string;
+  Dosage: string;
+  Frequency: string;
+  Usage: string;
+  Remark: string;
+  Doctor: string;
+  PerformStatus: number;
+  ChargeStatus: string;
+  AssociatePresDetailId: string | null;
+  MedicalAdviceType: number;
+  MedicalItemType: number;
+  MedicalItemName: string;
+  Specifications: string;
+  SingleDose: number;
+  DoseUnitName: string;
+  FrequencyName: string;
+  UsageName: string;
+  PrescriptionDate: string;
+  RejectState: number;
+  RejectName: string;
+  RejectUserName: string;
+  RejectTime: string;
+  RejectReason: string;
+  DataState: number;
+  IsVisible: string;
 }
 
 /** 停用医嘱 */
 interface StoppedOrder {
-  orderId: string;
-  category: string;
-  content: string;
-  stopReason: string;
-  stopBy: string;
-  stopTime: string;
+  OrderId: string;
+  Category: string;
+  Content: string;
+  StopReason: string;
+  StopBy: string;
+  StopTime: string;
+}
+
+/** 处方单 */
+interface Prescription {
+  Id: string;
+  PrescriptionNo: string;
+  ChargeType: string;
+  ChargeStatus: string;
+  MedicalAdviceSign: number;
+  LongDoctorAdviceType: string;
+  CurrPrescriptionDiagnosis: string;
 }
 
 /** 开医嘱表单 */
 interface NewOrderForm {
-  orderType: string;
-  drugName: string;
-  dosage: string;
-  unit: string;
-  frequency: string;
-  usage: string;
-  remark: string;
+  OrderType: string;
+  DrugName: string;
+  Dosage: string;
+  Unit: string;
+  Frequency: string;
+  Usage: string;
+  Remark: string;
+  CategoryId: string;
+  MedicalItemId: string;
+  PrescribingQty: number;
+  PrescribingUnit: string;
+  WhetherToCharge: number;
 }
 
 // ==================== 常量 ====================
@@ -138,30 +175,10 @@ const UNIT_OPTIONS = [
   { label: '袋', value: '袋' },
 ];
 
-const DRUG_SEARCH_OPTIONS = [
-  { label: '低分子肝素钙注射液', value: '低分子肝素钙注射液' },
-  { label: '低分子肝素钠注射液', value: '低分子肝素钠注射液' },
-  { label: '普通肝素钠注射液', value: '普通肝素钠注射液' },
-  { label: '促红细胞生成素注射液（EPO）', value: '促红细胞生成素注射液（EPO）' },
-  { label: '蔗糖铁注射液', value: '蔗糖铁注射液' },
-  { label: '碳酸氢钠片', value: '碳酸氢钠片' },
-  { label: '碳酸钙D3片', value: '碳酸钙D3片' },
-  { label: '骨化三醇胶丸（活性维生素D）', value: '骨化三醇胶丸（活性维生素D）' },
-  { label: '司维拉姆片', value: '司维拉姆片' },
-  { label: '碳酸镧咀嚼片', value: '碳酸镧咀嚼片' },
-  { label: '呋塞米片（速尿）', value: '呋塞米片（速尿）' },
-  { label: '硝苯地平控释片', value: '硝苯地平控释片' },
-  { label: '缬沙坦胶囊', value: '缬沙坦胶囊' },
-  { label: '左卡尼汀注射液', value: '左卡尼汀注射液' },
-  { label: '维生素B族片', value: '维生素B族片' },
-  { label: '叶酸片', value: '叶酸片' },
-  { label: '阿托伐他汀钙片', value: '阿托伐他汀钙片' },
-  { label: '盐酸曲美他嗪片', value: '盐酸曲美他嗪片' },
-];
-
 // ==================== 状态 ====================
 
 const loading = ref(false);
+const tableLoading = ref(false);
 
 // 左侧患者列表
 const patientList = ref<SignedPatient[]>([]);
@@ -174,360 +191,53 @@ const allergyRecords = ref<AllergyRecord[]>([]);
 // 诊断信息
 const diagnosisList = ref<DiagnosisInfo[]>([]);
 
-// 用药方案
-const medicationOrders = ref<MedicationOrder[]>([]);
+// 医嘱数据
+const orderList = ref<OrderItem[]>([]);
 const activeOrdersExpanded = ref(['长期医嘱', '临时医嘱']);
 
 // 停用医嘱
 const stoppedOrders = ref<StoppedOrder[]>([]);
 const stoppedOrdersExpanded = ref(['停用医嘱']);
 
+// 处方单列表
+const prescriptionList = ref<Prescription[]>([]);
+const selectedPrescriptionId = ref('');
+
+// 当前透析记录ID
+const dialysisId = ref('');
+const signId = ref('');
+
 // 治疗模式显示
 const treatmentModeDisplay = ref('');
 const dialyzerDisplay = ref('');
+
+// 医嘱类型标签
+const adviceId = ref('1'); // 1=透析医嘱, 3=医疗嘱咐
 
 // 开医嘱弹窗
 const orderDialogVisible = ref(false);
 const orderFormRef = ref<FormInstance>();
 const orderForm = reactive<NewOrderForm>({
-  orderType: '长期',
-  drugName: '',
-  dosage: '',
-  unit: 'mg',
-  frequency: 'qd',
-  usage: '口服',
-  remark: '',
+  OrderType: '长期',
+  DrugName: '',
+  Dosage: '',
+  Unit: 'mg',
+  Frequency: 'qd',
+  Usage: '口服',
+  Remark: '',
+  CategoryId: '',
+  MedicalItemId: '',
+  PrescribingQty: 1,
+  PrescribingUnit: '',
+  WhetherToCharge: 1,
 });
 
-// ==================== API 配置 ====================
+// 药品类别
+const categoryList = ref<any[]>([]);
 
-function getHeaders() {
-  return {
-    hdToken: sessionStorage.getItem('hdToken') || '',
-    hdUserName: sessionStorage.getItem('hdUserName') || '',
-    hdOrgId: sessionStorage.getItem('hdOrgId') || '',
-    hdOrgAuthCode: sessionStorage.getItem('hdOrgAuthCode') || '',
-    hdEmpDepartment: sessionStorage.getItem('hdEmpDepartment') || '',
-    ClientType: 'Web',
-  };
-}
-
-// ==================== API 调用（已注释，使用mock数据） ====================
-
-// import axios from 'axios';
-
-// /** 获取用药方案和过敏记录 */
-// async function fetchMedicationAndAllergy(patientId: string) {
-//   const res = await axios.get('/api/v1/OpenDoctorAdvice/4003', {
-//     params: { PatientId: patientId },
-//     headers: getHeaders(),
-//   });
-//   if (res.data?.Code === 0) {
-//     return res.data.Data;
-//   }
-//   return null;
-// }
-
-// /** 获取停用医嘱 */
-// async function fetchStoppedOrders(patientId: string) {
-//   const res = await axios.get('/api/v1/MedicationPlan/4012', {
-//     params: { PatientId: patientId },
-//     headers: getHeaders(),
-//   });
-//   if (res.data?.Code === 0) {
-//     return res.data.Data ?? [];
-//   }
-//   return [];
-// }
-
-// /** 获取诊断信息 */
-// async function fetchDiagnosisInfo(patientId: string) {
-//   const res = await axios.get('/api/v1/CaseHomePage/4001', {
-//     params: { PatientId: patientId },
-//     headers: getHeaders(),
-//   });
-//   if (res.data?.Code === 0) {
-//     return res.data.Data ?? [];
-//   }
-//   return [];
-// }
-
-// ==================== Mock 数据 ====================
-
-function generateMockPatients(): SignedPatient[] {
-  return [
-    {
-      patientId: 'P10001', patientName: '张三', gender: '男', age: 58,
-      bedNo: '1号床', treatmentMode: 'HD', dialyzer: 'FX80',
-      bloodInfectious: '乙肝', shift: '上午',
-    },
-    {
-      patientId: 'P10002', patientName: '李四', gender: '女', age: 45,
-      bedNo: '2号床', treatmentMode: 'HDF', dialyzer: 'FX100',
-      bloodInfectious: '', shift: '上午',
-    },
-    {
-      patientId: 'P10003', patientName: '王五', gender: '男', age: 62,
-      bedNo: '3号床', treatmentMode: 'HD+HP', dialyzer: 'F60S',
-      bloodInfectious: '丙肝', shift: '上午',
-    },
-    {
-      patientId: 'P10004', patientName: '赵六', gender: '男', age: 71,
-      bedNo: '4号床', treatmentMode: 'HD', dialyzer: 'F80S',
-      bloodInfectious: '', shift: '上午',
-    },
-    {
-      patientId: 'P10005', patientName: '钱七', gender: '女', age: 53,
-      bedNo: '5号床', treatmentMode: 'CRRT', dialyzer: 'Polyflux 17L',
-      bloodInfectious: 'HIV', shift: '上午',
-    },
-    {
-      patientId: 'P10006', patientName: '孙八', gender: '男', age: 39,
-      bedNo: '6号床', treatmentMode: 'HF', dialyzer: 'FX80',
-      bloodInfectious: '', shift: '上午',
-    },
-    {
-      patientId: 'P10007', patientName: '周九', gender: '女', age: 67,
-      bedNo: '7号床', treatmentMode: 'HDF', dialyzer: 'FX100',
-      bloodInfectious: '梅毒', shift: '上午',
-    },
-    {
-      patientId: 'P10008', patientName: '吴十', gender: '男', age: 44,
-      bedNo: '8号床', treatmentMode: 'HD', dialyzer: 'FX80',
-      bloodInfectious: '', shift: '上午',
-    },
-  ];
-}
-
-function generateMockAllergies(): AllergyRecord[] {
-  return [
-    {
-      allergyId: 'ALG001',
-      allergen: '青霉素类',
-      allergyType: '药物过敏',
-      severity: '重度',
-      reaction: '过敏性休克',
-      discoverDate: '2020-03-15',
-    },
-    {
-      allergyId: 'ALG002',
-      allergen: '磺胺类药物',
-      allergyType: '药物过敏',
-      severity: '中度',
-      reaction: '皮疹、瘙痒',
-      discoverDate: '2021-07-22',
-    },
-  ];
-}
-
-function generateMockDiagnosis(): DiagnosisInfo[] {
-  return [
-    {
-      diagnosisId: 'DG001',
-      diagnosisName: '慢性肾脏病5期',
-      diagnosisCode: 'N18.5',
-      diagnosisType: '主要诊断',
-      diagnosisDate: '2022-01-10',
-      isPrimary: true,
-    },
-    {
-      diagnosisId: 'DG002',
-      diagnosisName: '肾性贫血',
-      diagnosisCode: 'D63.1',
-      diagnosisType: '并发症',
-      diagnosisDate: '2022-01-10',
-      isPrimary: false,
-    },
-    {
-      diagnosisId: 'DG003',
-      diagnosisName: '肾性骨营养不良',
-      diagnosisCode: 'N25.0',
-      diagnosisType: '并发症',
-      diagnosisDate: '2022-03-15',
-      isPrimary: false,
-    },
-    {
-      diagnosisId: 'DG004',
-      diagnosisName: '高血压病3级（极高危）',
-      diagnosisCode: 'I11.9',
-      diagnosisType: '合并症',
-      diagnosisDate: '2020-06-20',
-      isPrimary: false,
-    },
-    {
-      diagnosisId: 'DG005',
-      diagnosisName: '2型糖尿病',
-      diagnosisCode: 'E11.9',
-      diagnosisType: '合并症',
-      diagnosisDate: '2018-09-05',
-      isPrimary: false,
-    },
-  ];
-}
-
-function generateMockMedicationOrders(): MedicationOrder[] {
-  return [
-    {
-      orderId: 'ORD001',
-      category: '透析用药',
-      content: '低分子肝素钙注射液 4000IU 透析时 皮下注射',
-      drugName: '低分子肝素钙注射液',
-      dosage: '4000IU',
-      frequency: '透析时',
-      usage: '皮下注射',
-      remark: '抗凝',
-      doctor: '王主任',
-      orderTime: '2026-05-01 08:30:00',
-      orderType: '长期',
-    },
-    {
-      orderId: 'ORD002',
-      category: '降压药',
-      content: '硝苯地平控释片 30mg qd 口服',
-      drugName: '硝苯地平控释片',
-      dosage: '30mg',
-      frequency: 'qd',
-      usage: '口服',
-      remark: '控制血压',
-      doctor: '王主任',
-      orderTime: '2026-05-01 08:30:00',
-      orderType: '长期',
-    },
-    {
-      orderId: 'ORD003',
-      category: '纠正贫血',
-      content: '促红细胞生成素注射液（EPO） 3000IU qw 皮下注射',
-      drugName: '促红细胞生成素注射液（EPO）',
-      dosage: '3000IU',
-      frequency: 'qw',
-      usage: '皮下注射',
-      remark: '目标Hb 110-120g/L',
-      doctor: '王主任',
-      orderTime: '2026-05-01 08:30:00',
-      orderType: '长期',
-    },
-    {
-      orderId: 'ORD004',
-      category: '补铁',
-      content: '蔗糖铁注射液 100mg qw 透析中给药',
-      drugName: '蔗糖铁注射液',
-      dosage: '100mg',
-      frequency: 'qw',
-      usage: '透析中给药',
-      remark: '铁蛋白<100ng/ml时使用',
-      doctor: '王主任',
-      orderTime: '2026-05-01 08:30:00',
-      orderType: '长期',
-    },
-    {
-      orderId: 'ORD005',
-      category: '钙磷代谢',
-      content: '碳酸钙D3片 600mg tid 口服',
-      drugName: '碳酸钙D3片',
-      dosage: '600mg',
-      frequency: 'tid',
-      usage: '口服',
-      remark: '随餐服用',
-      doctor: '王主任',
-      orderTime: '2026-05-01 08:30:00',
-      orderType: '长期',
-    },
-    {
-      orderId: 'ORD006',
-      category: '钙磷代谢',
-      content: '骨化三醇胶丸（活性维生素D） 0.25ug qd 口服',
-      drugName: '骨化三醇胶丸（活性维生素D）',
-      dosage: '0.25ug',
-      frequency: 'qd',
-      usage: '口服',
-      remark: '监测血钙',
-      doctor: '王主任',
-      orderTime: '2026-05-01 08:30:00',
-      orderType: '长期',
-    },
-    {
-      orderId: 'ORD007',
-      category: '降脂药',
-      content: '阿托伐他汀钙片 20mg qn 口服',
-      drugName: '阿托伐他汀钙片',
-      dosage: '20mg',
-      frequency: 'qd',
-      usage: '口服',
-      remark: '睡前服用',
-      doctor: '李副主任',
-      orderTime: '2026-05-01 08:30:00',
-      orderType: '长期',
-    },
-    {
-      orderId: 'ORD008',
-      category: '营养支持',
-      content: '左卡尼汀注射液 1g 透析中给药',
-      drugName: '左卡尼汀注射液',
-      dosage: '1g',
-      frequency: '透析时',
-      usage: '透析中给药',
-      remark: '改善乏力症状',
-      doctor: '李副主任',
-      orderTime: '2026-05-01 08:30:00',
-      orderType: '长期',
-    },
-    {
-      orderId: 'ORD009',
-      category: '透析用药',
-      content: '呋塞米片 20mg st 口服',
-      drugName: '呋塞米片（速尿）',
-      dosage: '20mg',
-      frequency: 'st',
-      usage: '口服',
-      remark: '透析间期水肿明显时使用',
-      doctor: '王主任',
-      orderTime: '2026-05-10 10:15:00',
-      orderType: '临时',
-    },
-    {
-      orderId: 'ORD010',
-      category: '透析用药',
-      content: '碳酸氢钠片 0.5g tid 口服',
-      drugName: '碳酸氢钠片',
-      dosage: '0.5g',
-      frequency: 'tid',
-      usage: '口服',
-      remark: '纠正代谢性酸中毒',
-      doctor: '李副主任',
-      orderTime: '2026-05-10 10:20:00',
-      orderType: '临时',
-    },
-  ];
-}
-
-function generateMockStoppedOrders(): StoppedOrder[] {
-  return [
-    {
-      orderId: 'SORD001',
-      category: '降压药',
-      content: '缬沙坦胶囊 80mg qd 口服',
-      stopReason: '血钾偏高，更换为其他降压药',
-      stopBy: '王主任',
-      stopTime: '2026-04-20 09:00:00',
-    },
-    {
-      orderId: 'SORD002',
-      category: '降磷药',
-      content: '司维拉姆片 800mg tid 口服',
-      stopReason: '患者胃肠道反应严重，无法耐受',
-      stopBy: '王主任',
-      stopTime: '2026-04-15 14:30:00',
-    },
-    {
-      orderId: 'SORD003',
-      category: '纠正贫血',
-      content: '促红细胞生成素注射液（EPO） 10000IU qw 皮下注射',
-      stopReason: 'Hb已达目标值，调整剂量',
-      stopBy: '李副主任',
-      stopTime: '2026-03-28 10:00:00',
-    },
-  ];
-}
+// 频次和用法
+const frequencyItems = ref<any[]>([]);
+const usageItems = ref<any[]>([]);
 
 // ==================== 计算属性 ====================
 
@@ -536,35 +246,488 @@ const filteredPatients = computed(() => {
   const kw = searchPatient.value.toLowerCase();
   return patientList.value.filter(
     (p) =>
-      p.patientName.toLowerCase().includes(kw) ||
-      p.bedNo.toLowerCase().includes(kw) ||
-      p.patientId.toLowerCase().includes(kw),
+      p.PatientName.toLowerCase().includes(kw) ||
+      p.BedNo.toLowerCase().includes(kw) ||
+      p.PatientId.toLowerCase().includes(kw),
   );
 });
 
 const selectedPatient = computed(() => {
-  return patientList.value.find((p) => p.patientId === selectedPatientId.value);
+  return patientList.value.find((p) => p.PatientId === selectedPatientId.value);
 });
 
 /** 按医嘱类型分组的长期医嘱 */
 const longTermOrders = computed(() => {
-  return medicationOrders.value.filter((o) => o.orderType === '长期');
+  return orderList.value.filter((o) => o.OrderType === '长期');
 });
 
 /** 按医嘱类型分组的临时医嘱 */
 const temporaryOrders = computed(() => {
-  return medicationOrders.value.filter((o) => o.orderType === '临时');
+  return orderList.value.filter((o) => o.OrderType === '临时');
 });
 
 /** 主要诊断 */
 const primaryDiagnosis = computed(() => {
-  return diagnosisList.value.filter((d) => d.isPrimary);
+  return diagnosisList.value.filter((d) => d.IsPrimary);
 });
 
 /** 其他诊断 */
 const otherDiagnosis = computed(() => {
-  return diagnosisList.value.filter((d) => !d.isPrimary);
+  return diagnosisList.value.filter((d) => !d.IsPrimary);
 });
+
+// ==================== API 调用 ====================
+
+/** 获取已签到患者列表 */
+async function getSignedPatientList() {
+  try {
+    const date = new Date().toISOString().split('T')[0];
+    const res = await swsApi.swsGet('SchedulingManage/4006', {
+      Date: date,
+      Shift: '',
+    });
+    if (res.Code === 200 && res.Data) {
+      patientList.value = res.Data.map((item: any) => ({
+        PatientId: item.PatientId,
+        PatientName: item.PatientName,
+        Gender: item.Sex,
+        Age: item.Age,
+        BedNo: item.BedNo || item.SickbedNo || '',
+        TreatmentMode: item.ActualDialysisType || item.DialysisType || '',
+        Dialyzer: item.Dialyzer || '',
+        BloodInfectious: item.BloodInfectious || '',
+        Shift: item.ActualShift || item.Shift || '',
+      }));
+    }
+  } catch (error) {
+    ElMessage.error('获取患者列表失败');
+  }
+}
+
+/** 获取患者透析记录 */
+async function getDialysisRecord(patientId: string) {
+  try {
+    const date = new Date().toISOString().split('T')[0];
+    const res = await swsApi.swsGet('DialysisRecordManage/4001', {
+      PatientId: patientId,
+      PatientCycleSchedulingId: signId.value,
+    });
+    if (res.Code === 200 && res.Data) {
+      dialysisId.value = res.Data.Id || '';
+      treatmentModeDisplay.value = `${res.Data.DialysisType || ''} / ${res.Data.Dialyzer || ''}`;
+      dialyzerDisplay.value = res.Data.Dialyzer || '';
+    }
+  } catch (error) {
+    console.error('获取透析记录失败', error);
+  }
+}
+
+/** 获取过敏记录 */
+async function getAllergyRecords(patientId: string) {
+  try {
+    const res = await swsApi.swsGet('OpenDoctorAdvice/4003', {
+      PatientId: patientId,
+    });
+    if (res.Code === 200 && res.Data) {
+      allergyRecords.value = res.Data.AllergyList || [];
+    }
+  } catch (error) {
+    console.error('获取过敏记录失败', error);
+  }
+}
+
+/** 获取诊断信息 */
+async function getDiagnosisInfo(patientId: string) {
+  try {
+    const res = await swsApi.swsGet('CaseHomePage/4001', {
+      PatientId: patientId,
+    });
+    if (res.Code === 200 && res.Data) {
+      diagnosisList.value = res.Data || [];
+    }
+  } catch (error) {
+    console.error('获取诊断信息失败', error);
+  }
+}
+
+/** 获取医嘱列表 */
+async function getOrderList(medicalAdviceType: string = '1') {
+  if (!selectedPatientId.value) return;
+  
+  tableLoading.value = true;
+  try {
+    const res = await swsApi.swsGet('OpenDoctorAdvice/4001', {
+      PatientId: selectedPatientId.value,
+      MedicalAdviceType: medicalAdviceType,
+      DialysisId: dialysisId.value,
+    });
+    if (res.Code === 200 && res.Data) {
+      prescriptionList.value = res.Data.map((item: any) => ({
+        Id: item.Id,
+        PrescriptionNo: item.PrescriptionNo,
+        ChargeType: item.ChargeType,
+        ChargeStatus: item.ChargeStatus,
+        MedicalAdviceSign: item.MedicalAdviceSign,
+        LongDoctorAdviceType: item.LongDoctorAdviceType,
+        CurrPrescriptionDiagnosis: item.CurrPrescriptionDiagnosis,
+      }));
+      
+      // 默认选中第一个处方单
+      if (prescriptionList.value.length > 0 && !selectedPrescriptionId.value) {
+        selectedPrescriptionId.value = prescriptionList.value[0].Id;
+        await getPrescriptionDetail(selectedPrescriptionId.value);
+      }
+    }
+  } catch (error) {
+    ElMessage.error('获取医嘱列表失败');
+  } finally {
+    tableLoading.value = false;
+  }
+}
+
+/** 获取处方单明细 */
+async function getPrescriptionDetail(prescriptionId: string) {
+  if (!prescriptionId) return;
+  
+  tableLoading.value = true;
+  try {
+    const res = await swsApi.swsGet('OpenDoctorAdvice/4004', {
+      PrescriptionId: prescriptionId,
+    });
+    if (res.Code === 200 && res.Data) {
+      orderList.value = res.Data.map((item: any) => ({
+        Id: item.Id,
+        OrderId: item.Id,
+        OrderName: item.MedicalItemName,
+        OrderType: item.MedicalAdviceType === 1 ? '长期' : '临时',
+        OrderStatus: item.ChargeStatus === '1' ? '未收费' : '已收费',
+        OrderTime: item.PrescriptionDate,
+        Category: item.CatalogueName || '透析用药',
+        Content: item.MedicalContent,
+        DrugName: item.MedicalItemName,
+        Dosage: `${item.SingleDose || ''} ${item.DoseUnitName || ''}`,
+        Frequency: item.FrequencyName,
+        Usage: item.UsageName,
+        Remark: item.Remark,
+        Doctor: item.DoctorName,
+        PerformStatus: item.PerformStatus,
+        ChargeStatus: item.ChargeStatus,
+        AssociatePresDetailId: item.AssociatePresDetailId,
+        MedicalAdviceType: item.MedicalAdviceType,
+        MedicalItemType: item.MedicalItemType,
+        MedicalItemName: item.MedicalItemName,
+        Specifications: item.Specifications,
+        SingleDose: item.SingleDose,
+        DoseUnitName: item.DoseUnitName,
+        FrequencyName: item.FrequencyName,
+        UsageName: item.UsageName,
+        PrescriptionDate: item.PrescriptionDate,
+        RejectState: item.RejectState,
+        RejectName: item.RejectName,
+        RejectUserName: item.RejectUserName,
+        RejectTime: item.RejectTime,
+        RejectReason: item.RejectReason,
+        DataState: item.DataState,
+        IsVisible: item.IsVisible,
+      }));
+    }
+  } catch (error) {
+    ElMessage.error('获取处方明细失败');
+  } finally {
+    tableLoading.value = false;
+  }
+}
+
+/** 获取停用医嘱 */
+async function getStoppedOrders(patientId: string) {
+  try {
+    const res = await swsApi.swsGet('MedicationPlan/4012', {
+      PatientId: patientId,
+    });
+    if (res.Code === 200 && res.Data) {
+      stoppedOrders.value = res.Data || [];
+    }
+  } catch (error) {
+    console.error('获取停用医嘱失败', error);
+  }
+}
+
+/** 获取药品类别 */
+async function getCategoryList() {
+  try {
+    const res = await swsApi.swsGet('MedicationPlan/4002', {});
+    if (res.Code === 200 && res.Data) {
+      categoryList.value = res.Data;
+    }
+  } catch (error) {
+    console.error('获取药品类别失败', error);
+  }
+}
+
+/** 获取用法和频次 */
+async function getWayType() {
+  try {
+    const res = await swsApi.swsGet('UseWays/4004', {});
+    if (res.Code === 200 && res.Data) {
+      const arr1 = [];
+      const arr2 = [];
+      for (const item of res.Data) {
+        if (item.WayType === 1) {
+          arr1.push(item);
+        } else if (item.WayType === 2) {
+          arr2.push(item);
+        }
+      }
+      usageItems.value = arr1;
+      frequencyItems.value = arr2;
+    }
+  } catch (error) {
+    console.error('获取用法频次失败', error);
+  }
+}
+
+/** 保存医嘱 */
+async function saveOrder(formData: NewOrderForm) {
+  try {
+    const jsonStr = {
+      PatientId: selectedPatientId.value,
+      MedicalAdviceType: 1,
+      PrescriptionId: selectedPrescriptionId.value,
+      MaterialId: formData.MedicalItemId,
+      CategoryId: formData.CategoryId,
+      MedicalContent: `${formData.DrugName} ${formData.Dosage}${formData.Unit} ${formData.Frequency} ${formData.Usage}`,
+      PrescribingQty: formData.PrescribingQty,
+      PrescribingUnit: formData.PrescribingUnit,
+      SingleDose: Number(formData.Dosage),
+      DoseUnitName: formData.Unit,
+      FrequencyId: formData.Frequency,
+      UsageId: formData.Usage,
+      WhetherToCharge: formData.WhetherToCharge,
+      Remark: formData.Remark,
+      DialysisId: dialysisId.value,
+      PrescriptionDate: new Date().toISOString().replace('T', ' ').slice(0, 19),
+    };
+    
+    const res = await swsApi.swsPost('OpenDoctorAdvice/1001', jsonStr);
+    if (res.Code === 200) {
+      ElMessage.success(res.Msg || '医嘱开立成功');
+      orderDialogVisible.value = false;
+      // 刷新列表
+      getPrescriptionDetail(selectedPrescriptionId.value);
+    } else {
+      ElMessage.error(res.Msg || '开立医嘱失败');
+    }
+  } catch (error) {
+    ElMessage.error('开立医嘱失败');
+  }
+}
+
+/** 删除医嘱 */
+async function deleteOrder(orderId: string) {
+  try {
+    const res = await swsApi.swsDelete('OpenDoctorAdvice/2001', {
+      Id: orderId,
+    });
+    if (res.Code === 200) {
+      ElMessage.success(res.Msg || '删除成功');
+      // 刷新列表
+      getPrescriptionDetail(selectedPrescriptionId.value);
+    } else {
+      ElMessage.error(res.Msg || '删除失败');
+    }
+  } catch (error) {
+    ElMessage.error('删除医嘱失败');
+  }
+}
+
+/** 停用医嘱 */
+async function stopOrder(orderId: string) {
+  try {
+    const res = await swsApi.swsPut('OpenDoctorAdvice/3003', {
+      Id: orderId,
+    });
+    if (res.Code === 200) {
+      ElMessage.success(res.Msg || '停用成功');
+      // 刷新列表
+      getPrescriptionDetail(selectedPrescriptionId.value);
+    } else {
+      ElMessage.error(res.Msg || '停用失败');
+    }
+  } catch (error) {
+    ElMessage.error('停用医嘱失败');
+  }
+}
+
+/** 新增处方单 */
+async function addPrescription() {
+  try {
+    const res = await swsApi.swsPost('OpenDoctorAdvice/1002', {
+      PatientId: selectedPatientId.value,
+      PatientCycleSchedulingId: signId.value,
+      MedicalAdviceType: adviceId.value,
+      DialysisId: dialysisId.value,
+    });
+    if (res.Code === 200) {
+      ElMessage.success(res.Msg || '新增处方单成功');
+      getOrderList(adviceId.value);
+    } else {
+      ElMessage.error(res.Msg || '新增处方单失败');
+    }
+  } catch (error) {
+    ElMessage.error('新增处方单失败');
+  }
+}
+
+/** 删除处方单 */
+async function deletePrescription(prescriptionId: string) {
+  try {
+    const res = await swsApi.swsDelete('OpenDoctorAdvice/2002', {
+      Id: prescriptionId,
+    });
+    if (res.Code === 200) {
+      ElMessage.success(res.Msg || '删除处方单成功');
+      selectedPrescriptionId.value = '';
+      getOrderList(adviceId.value);
+    } else {
+      ElMessage.error(res.Msg || '删除处方单失败');
+    }
+  } catch (error) {
+    ElMessage.error('删除处方单失败');
+  }
+}
+
+// ==================== 业务逻辑 ====================
+
+function selectPatient(patient: SignedPatient) {
+  selectedPatientId.value = patient.PatientId;
+  treatmentModeDisplay.value = `${patient.TreatmentMode} / ${patient.Dialyzer}`;
+  dialyzerDisplay.value = patient.Dialyzer;
+  loadPatientData(patient);
+}
+
+async function loadPatientData(patient: SignedPatient) {
+  loading.value = true;
+  await Promise.all([
+    getDialysisRecord(patient.PatientId),
+    getAllergyRecords(patient.PatientId),
+    getDiagnosisInfo(patient.PatientId),
+    getOrderList(adviceId.value),
+    getStoppedOrders(patient.PatientId),
+  ]);
+  loading.value = false;
+}
+
+/** 选择处方单 */
+function selectPrescription(prescription: Prescription) {
+  selectedPrescriptionId.value = prescription.Id;
+  getPrescriptionDetail(prescription.Id);
+}
+
+/** 更新透析方案 */
+function handleUpdateDialysisPlan() {
+  ElMessage.info('更新透析方案功能开发中...');
+}
+
+/** 打开开医嘱弹窗 */
+function handleOpenOrderDialog() {
+  if (!selectedPatientId.value) {
+    ElMessage.warning('请先选择患者');
+    return;
+  }
+  if (!selectedPrescriptionId.value) {
+    ElMessage.warning('请先选择或创建处方单');
+    return;
+  }
+  
+  // 重置表单
+  Object.assign(orderForm, {
+    OrderType: '长期',
+    DrugName: '',
+    Dosage: '',
+    Unit: 'mg',
+    Frequency: 'qd',
+    Usage: '口服',
+    Remark: '',
+    CategoryId: '',
+    MedicalItemId: '',
+    PrescribingQty: 1,
+    PrescribingUnit: '',
+    WhetherToCharge: 1,
+  });
+  
+  orderDialogVisible.value = true;
+}
+
+/** 提交开医嘱 */
+async function handleSubmitOrder() {
+  if (!orderFormRef.value) return;
+  await orderFormRef.value.validate(async (valid) => {
+    if (!valid) return;
+    await saveOrder(orderForm);
+  });
+}
+
+/** 停用医嘱 */
+function handleStopOrder(order: OrderItem) {
+  ElMessageBox.confirm(
+    `确定要停用医嘱【${order.OrderName}】吗？`,
+    '确认停用',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning',
+    }
+  ).then(() => {
+    stopOrder(order.OrderId);
+  });
+}
+
+/** 删除医嘱 */
+function handleDeleteOrder(order: OrderItem) {
+  ElMessageBox.confirm(
+    `确定要删除医嘱【${order.OrderName}】吗？删除后不可恢复！`,
+    '确认删除',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'danger',
+    }
+  ).then(() => {
+    deleteOrder(order.OrderId);
+  });
+}
+
+/** 新增处方单 */
+function handleAddPrescription() {
+  if (!selectedPatientId.value) {
+    ElMessage.warning('请先选择患者');
+    return;
+  }
+  addPrescription();
+}
+
+/** 删除处方单 */
+function handleDeletePrescription(prescription: Prescription) {
+  ElMessageBox.confirm(
+    `确定要删除处方单【${prescription.PrescriptionNo}】吗？删除后不可恢复！`,
+    '确认删除',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'danger',
+    }
+  ).then(() => {
+    deletePrescription(prescription.Id);
+  });
+}
+
+/** 切换医嘱类型 */
+function handleAdviceChange(type: string) {
+  adviceId.value = type;
+  selectedPrescriptionId.value = '';
+  orderList.value = [];
+  getOrderList(type);
+}
 
 /** 过敏严重程度标签类型 */
 function getSeverityTagType(severity: string): 'danger' | 'warning' | 'info' {
@@ -590,98 +753,26 @@ function getCategoryTagType(category: string): '' | 'success' | 'warning' | 'dan
   return map[category] || 'info';
 }
 
-// ==================== 业务逻辑 ====================
-
-function loadPatients() {
-  patientList.value = generateMockPatients();
-}
-
-function selectPatient(patient: SignedPatient) {
-  selectedPatientId.value = patient.patientId;
-  treatmentModeDisplay.value = `${patient.treatmentMode} / ${patient.dialyzer}`;
-  dialyzerDisplay.value = patient.dialyzer;
-  loadPatientData(patient);
-}
-
-function loadPatientData(patient: SignedPatient) {
-  loading.value = true;
-  setTimeout(() => {
-    // const [medicationData, stoppedData, diagnosisData] = await Promise.all([...]);
-    allergyRecords.value = generateMockAllergies();
-    diagnosisList.value = generateMockDiagnosis();
-    medicationOrders.value = generateMockMedicationOrders();
-    stoppedOrders.value = generateMockStoppedOrders();
-    loading.value = false;
-  }, 400);
-}
-
-/** 更新透析方案 */
-function handleUpdateDialysisPlan() {
-  ElMessage.info('更新透析方案功能开发中...');
-}
-
-/** 打开开医嘱弹窗 */
-function handleOpenOrderDialog() {
-  if (!selectedPatientId.value) {
-    ElMessage.warning('请先选择患者');
-    return;
+/** 获取行样式 */
+function getRowClassName({ row }: { row: OrderItem }) {
+  if (row.DataState === 2) {
+    return 'disabled-row';
   }
-  Object.assign(orderForm, {
-    orderType: '长期',
-    drugName: '',
-    dosage: '',
-    unit: 'mg',
-    frequency: 'qd',
-    usage: '口服',
-    remark: '',
-  });
-  orderDialogVisible.value = true;
-}
-
-/** 提交开医嘱 */
-async function handleSubmitOrder() {
-  if (!orderFormRef.value) return;
-  await orderFormRef.value.validate(async (valid) => {
-    if (!valid) return;
-
-    try {
-      const newOrder: MedicationOrder = {
-        orderId: `ORD${Date.now()}`,
-        category: '透析用药',
-        content: `${orderForm.drugName} ${orderForm.dosage}${orderForm.unit} ${orderForm.frequency} ${orderForm.usage}`,
-        drugName: orderForm.drugName,
-        dosage: `${orderForm.dosage}${orderForm.unit}`,
-        frequency: orderForm.frequency,
-        usage: orderForm.usage,
-        remark: orderForm.remark,
-        doctor: sessionStorage.getItem('hdUserName') || '当前医生',
-        orderTime: new Date().toISOString().replace('T', ' ').slice(0, 19),
-        orderType: orderForm.orderType,
-      };
-
-      medicationOrders.value.push(newOrder);
-      orderDialogVisible.value = false;
-      ElMessage.success('医嘱开立成功');
-    } catch {
-      ElMessage.error('开立医嘱失败');
-    }
-  });
-}
-
-/** 停用医嘱 */
-function handleStopOrder(order: MedicationOrder) {
-  ElMessage.warning(`停用医嘱功能开发中...（${order.drugName}）`);
-}
-
-/** 删除医嘱 */
-function handleDeleteOrder(order: MedicationOrder) {
-  ElMessage.warning(`删除医嘱功能开发中...（${order.drugName}）`);
+  if (row.IsVisible === '0' && row.MedicalItemType !== 5) {
+    return 'unexecuted-row';
+  }
+  if (row.PerformStatus === 2) {
+    return 'red-row';
+  }
+  return '';
 }
 
 // ==================== 生命周期 ====================
 
 onMounted(() => {
-  loadPatients();
+  getSignedPatientList();
+  getCategoryList();
+  getWayType();
 });
 </script>
 
@@ -701,30 +792,30 @@ onMounted(() => {
         <div class="patient-list">
           <div
             v-for="patient in filteredPatients"
-            :key="patient.patientId"
+            :key="patient.PatientId"
             class="patient-item"
-            :class="{ 'patient-item--active': selectedPatientId === patient.patientId }"
+            :class="{ 'patient-item--active': selectedPatientId === patient.PatientId }"
             @click="selectPatient(patient)"
           >
             <div class="patient-item__name">
-              {{ patient.patientName }}
+              {{ patient.PatientName }}
               <ElTag
-                v-if="patient.bloodInfectious"
-                :type="patient.bloodInfectious === 'HIV' || patient.bloodInfectious === '乙肝' ? 'danger' : 'warning'"
+                v-if="patient.BloodInfectious"
+                :type="patient.BloodInfectious === 'HIV' || patient.BloodInfectious === '乙肝' ? 'danger' : 'warning'"
                 size="small"
                 effect="dark"
                 class="infectious-tag"
               >
-                {{ patient.bloodInfectious }}
+                {{ patient.BloodInfectious }}
               </ElTag>
             </div>
             <div class="patient-item__info">
-              <span>{{ patient.bedNo }}</span>
-              <span>{{ patient.gender }}/{{ patient.age }}岁</span>
+              <span>{{ patient.BedNo }}</span>
+              <span>{{ patient.Gender }}/{{ patient.Age }}岁</span>
             </div>
             <div class="patient-item__mode">
-              <ElTag size="small" :type="patient.treatmentMode === 'HD' ? 'success' : 'warning'">
-                {{ patient.treatmentMode }}
+              <ElTag size="small" :type="patient.TreatmentMode === 'HD' ? 'success' : 'warning'">
+                {{ patient.TreatmentMode }}
               </ElTag>
             </div>
           </div>
@@ -746,6 +837,9 @@ onMounted(() => {
               <ElButton type="success" @click="handleOpenOrderDialog">
                 + 开医嘱
               </ElButton>
+              <ElButton type="warning" @click="handleAddPrescription">
+                + 新增处方单
+              </ElButton>
             </div>
             <div class="top-action-right">
               <span class="treatment-mode-display">
@@ -757,7 +851,37 @@ onMounted(() => {
             </div>
           </div>
 
-          <!-- 2. 过敏记录区 -->
+          <!-- 2. 处方单列表 -->
+          <ElCard shadow="never" class="section-card" v-if="prescriptionList.length > 0">
+            <template #header>
+              <div class="section-title">处方单列表</div>
+            </template>
+            <div class="prescription-list">
+              <div
+                v-for="prescription in prescriptionList"
+                :key="prescription.Id"
+                class="prescription-item"
+                :class="{ 'prescription-item--active': selectedPrescriptionId === prescription.Id }"
+                @click="selectPrescription(prescription)"
+              >
+                <span class="prescription-no">{{ prescription.PrescriptionNo }}</span>
+                <ElTag
+                  :type="prescription.ChargeType === '自费' ? 'info' : prescription.ChargeType === '特病医保' ? 'warning' : 'success'"
+                  size="small"
+                >
+                  {{ prescription.ChargeType }}
+                </ElTag>
+                <span
+                  class="delete-prescription"
+                  @click.stop="handleDeletePrescription(prescription)"
+                >
+                  <i class="el-icon-close">×</i>
+                </span>
+              </div>
+            </div>
+          </ElCard>
+
+          <!-- 3. 过敏记录区 -->
           <ElCard
             v-if="allergyRecords.length > 0"
             shadow="never"
@@ -774,20 +898,20 @@ onMounted(() => {
             <div class="allergy-list">
               <div
                 v-for="allergy in allergyRecords"
-                :key="allergy.allergyId"
+                :key="allergy.AllergyId"
                 class="allergy-item"
               >
-                <span class="allergy-allergen">{{ allergy.allergen }}</span>
-                <ElTag :type="getSeverityTagType(allergy.severity)" size="small" effect="dark">
-                  {{ allergy.severity }}
+                <span class="allergy-allergen">{{ allergy.Allergen }}</span>
+                <ElTag :type="getSeverityTagType(allergy.Severity)" size="small" effect="dark">
+                  {{ allergy.Severity }}
                 </ElTag>
-                <span class="allergy-reaction">{{ allergy.reaction }}</span>
-                <span class="allergy-date">{{ allergy.discoverDate }}</span>
+                <span class="allergy-reaction">{{ allergy.Reaction }}</span>
+                <span class="allergy-date">{{ allergy.DiscoverDate }}</span>
               </div>
             </div>
           </ElCard>
 
-          <!-- 3. 主要诊断区 -->
+          <!-- 4. 主要诊断区 -->
           <ElCard shadow="never" class="section-card">
             <template #header>
               <div class="section-title">主要诊断</div>
@@ -795,25 +919,25 @@ onMounted(() => {
             <div class="diagnosis-list">
               <div
                 v-for="diagnosis in diagnosisList"
-                :key="diagnosis.diagnosisId"
+                :key="diagnosis.DiagnosisId"
                 class="diagnosis-item"
               >
                 <ElTag
-                  :type="diagnosis.isPrimary ? 'danger' : 'info'"
+                  :type="diagnosis.IsPrimary ? 'danger' : 'info'"
                   size="small"
                   effect="dark"
                   class="diagnosis-type-tag"
                 >
-                  {{ diagnosis.diagnosisType }}
+                  {{ diagnosis.DiagnosisType }}
                 </ElTag>
-                <span class="diagnosis-name">{{ diagnosis.diagnosisName }}</span>
-                <span class="diagnosis-code">{{ diagnosis.diagnosisCode }}</span>
-                <span class="diagnosis-date">{{ diagnosis.diagnosisDate }}</span>
+                <span class="diagnosis-name">{{ diagnosis.DiagnosisName }}</span>
+                <span class="diagnosis-code">{{ diagnosis.DiagnosisCode }}</span>
+                <span class="diagnosis-date">{{ diagnosis.DiagnosisDate }}</span>
               </div>
             </div>
           </ElCard>
 
-          <!-- 4. 用药方案区（可折叠） -->
+          <!-- 5. 用药方案区（可折叠） -->
           <ElCard shadow="never" class="section-card">
             <template #header>
               <div class="section-title">用药方案</div>
@@ -829,38 +953,53 @@ onMounted(() => {
                   border
                   size="small"
                   class="order-table"
+                  :row-class-name="getRowClassName"
+                  v-loading="tableLoading"
                 >
-                  <ElTableColumn prop="category" label="类别" width="100" align="center">
+                  <ElTableColumn prop="Category" label="类别" width="100" align="center">
                     <template #default="{ row }">
-                      <ElTag :type="getCategoryTagType(row.category)" size="small">
-                        {{ row.category }}
+                      <ElTag :type="getCategoryTagType(row.Category)" size="small">
+                        {{ row.Category }}
                       </ElTag>
                     </template>
                   </ElTableColumn>
-                  <ElTableColumn prop="content" label="医嘱内容" min-width="280">
+                  <ElTableColumn prop="Content" label="医嘱内容" min-width="280">
                     <template #default="{ row }">
-                      <span class="order-content">{{ row.content }}</span>
+                      <span class="order-content">{{ row.Content }}</span>
                     </template>
                   </ElTableColumn>
-                  <ElTableColumn prop="remark" label="备注" width="160">
+                  <ElTableColumn prop="Remark" label="备注" width="160">
                     <template #default="{ row }">
-                      <span class="order-remark">{{ row.remark }}</span>
+                      <span class="order-remark">{{ row.Remark }}</span>
                     </template>
                   </ElTableColumn>
-                  <ElTableColumn prop="doctor" label="医生" width="90" align="center" />
-                  <ElTableColumn prop="orderTime" label="下达时间" width="160" align="center">
+                  <ElTableColumn prop="Doctor" label="医生" width="90" align="center" />
+                  <ElTableColumn prop="OrderTime" label="下达时间" width="160" align="center">
                     <template #default="{ row }">
-                      <span class="order-time">{{ row.orderTime }}</span>
+                      <span class="order-time">{{ row.OrderTime }}</span>
                     </template>
                   </ElTableColumn>
                   <ElTableColumn label="操作" width="120" align="center" fixed="right">
                     <template #default="{ row }">
-                      <ElButton type="warning" link size="small" @click="handleStopOrder(row)">
+                      <ElButton
+                        v-if="row.PerformStatus !== 1"
+                        type="warning"
+                        link
+                        size="small"
+                        @click="handleStopOrder(row)"
+                      >
                         停用
                       </ElButton>
-                      <ElButton type="danger" link size="small" @click="handleDeleteOrder(row)">
+                      <ElButton
+                        v-if="row.PerformStatus !== 1"
+                        type="danger"
+                        link
+                        size="small"
+                        @click="handleDeleteOrder(row)"
+                      >
                         删除
                       </ElButton>
+                      <span v-else>已执行</span>
                     </template>
                   </ElTableColumn>
                 </ElTable>
@@ -876,38 +1015,53 @@ onMounted(() => {
                   border
                   size="small"
                   class="order-table"
+                  :row-class-name="getRowClassName"
+                  v-loading="tableLoading"
                 >
-                  <ElTableColumn prop="category" label="类别" width="100" align="center">
+                  <ElTableColumn prop="Category" label="类别" width="100" align="center">
                     <template #default="{ row }">
-                      <ElTag :type="getCategoryTagType(row.category)" size="small">
-                        {{ row.category }}
+                      <ElTag :type="getCategoryTagType(row.Category)" size="small">
+                        {{ row.Category }}
                       </ElTag>
                     </template>
                   </ElTableColumn>
-                  <ElTableColumn prop="content" label="医嘱内容" min-width="280">
+                  <ElTableColumn prop="Content" label="医嘱内容" min-width="280">
                     <template #default="{ row }">
-                      <span class="order-content">{{ row.content }}</span>
+                      <span class="order-content">{{ row.Content }}</span>
                     </template>
                   </ElTableColumn>
-                  <ElTableColumn prop="remark" label="备注" width="160">
+                  <ElTableColumn prop="Remark" label="备注" width="160">
                     <template #default="{ row }">
-                      <span class="order-remark">{{ row.remark }}</span>
+                      <span class="order-remark">{{ row.Remark }}</span>
                     </template>
                   </ElTableColumn>
-                  <ElTableColumn prop="doctor" label="医生" width="90" align="center" />
-                  <ElTableColumn prop="orderTime" label="下达时间" width="160" align="center">
+                  <ElTableColumn prop="Doctor" label="医生" width="90" align="center" />
+                  <ElTableColumn prop="OrderTime" label="下达时间" width="160" align="center">
                     <template #default="{ row }">
-                      <span class="order-time">{{ row.orderTime }}</span>
+                      <span class="order-time">{{ row.OrderTime }}</span>
                     </template>
                   </ElTableColumn>
                   <ElTableColumn label="操作" width="120" align="center" fixed="right">
                     <template #default="{ row }">
-                      <ElButton type="warning" link size="small" @click="handleStopOrder(row)">
+                      <ElButton
+                        v-if="row.PerformStatus !== 1"
+                        type="warning"
+                        link
+                        size="small"
+                        @click="handleStopOrder(row)"
+                      >
                         停用
                       </ElButton>
-                      <ElButton type="danger" link size="small" @click="handleDeleteOrder(row)">
+                      <ElButton
+                        v-if="row.PerformStatus !== 1"
+                        type="danger"
+                        link
+                        size="small"
+                        @click="handleDeleteOrder(row)"
+                      >
                         删除
                       </ElButton>
+                      <span v-else>已执行</span>
                     </template>
                   </ElTableColumn>
                 </ElTable>
@@ -915,7 +1069,7 @@ onMounted(() => {
             </ElCollapse>
           </ElCard>
 
-          <!-- 5. 停用医嘱区（可折叠） -->
+          <!-- 6. 停用医嘱区（可折叠） -->
           <ElCard v-if="stoppedOrders.length > 0" shadow="never" class="section-card">
             <template #header>
               <div class="section-title">停用医嘱</div>
@@ -928,25 +1082,25 @@ onMounted(() => {
                   size="small"
                   class="order-table stopped-table"
                 >
-                  <ElTableColumn prop="category" label="类别" width="100" align="center">
+                  <ElTableColumn prop="Category" label="类别" width="100" align="center">
                     <template #default="{ row }">
-                      <ElTag type="info" size="small">{{ row.category }}</ElTag>
+                      <ElTag type="info" size="small">{{ row.Category }}</ElTag>
                     </template>
                   </ElTableColumn>
-                  <ElTableColumn prop="content" label="医嘱内容" min-width="240">
+                  <ElTableColumn prop="Content" label="医嘱内容" min-width="240">
                     <template #default="{ row }">
-                      <span class="order-content stopped-content">{{ row.content }}</span>
+                      <span class="order-content stopped-content">{{ row.Content }}</span>
                     </template>
                   </ElTableColumn>
-                  <ElTableColumn prop="stopReason" label="停用原因" min-width="200">
+                  <ElTableColumn prop="StopReason" label="停用原因" min-width="200">
                     <template #default="{ row }">
-                      <span class="stop-reason">{{ row.stopReason }}</span>
+                      <span class="stop-reason">{{ row.StopReason }}</span>
                     </template>
                   </ElTableColumn>
-                  <ElTableColumn prop="stopBy" label="停用人" width="90" align="center" />
-                  <ElTableColumn prop="stopTime" label="停用时间" width="160" align="center">
+                  <ElTableColumn prop="StopBy" label="停用人" width="90" align="center" />
+                  <ElTableColumn prop="StopTime" label="停用时间" width="160" align="center">
                     <template #default="{ row }">
-                      <span class="order-time">{{ row.stopTime }}</span>
+                      <span class="order-time">{{ row.StopTime }}</span>
                     </template>
                   </ElTableColumn>
                 </ElTable>
@@ -981,17 +1135,17 @@ onMounted(() => {
         ref="orderFormRef"
         :model="orderForm"
         :rules="{
-          orderType: [{ required: true, message: '请选择医嘱类型', trigger: 'change' }],
-          drugName: [{ required: true, message: '请选择药品', trigger: 'change' }],
-          dosage: [{ required: true, message: '请输入剂量', trigger: 'blur' }],
-          frequency: [{ required: true, message: '请选择频率', trigger: 'change' }],
-          usage: [{ required: true, message: '请选择用法', trigger: 'change' }],
+          OrderType: [{ required: true, message: '请选择医嘱类型', trigger: 'change' }],
+          DrugName: [{ required: true, message: '请输入药品名称', trigger: 'blur' }],
+          Dosage: [{ required: true, message: '请输入剂量', trigger: 'blur' }],
+          Frequency: [{ required: true, message: '请选择频率', trigger: 'change' }],
+          Usage: [{ required: true, message: '请选择用法', trigger: 'change' }],
         }"
         label-width="90px"
         size="default"
       >
-        <ElFormItem label="医嘱类型" prop="orderType">
-          <ElSelect v-model="orderForm.orderType" style="width: 100%">
+        <ElFormItem label="医嘱类型" prop="OrderType">
+          <ElSelect v-model="orderForm.OrderType" style="width: 100%">
             <ElOption
               v-for="item in ORDER_TYPE_OPTIONS"
               :key="item.value"
@@ -1000,25 +1154,16 @@ onMounted(() => {
             />
           </ElSelect>
         </ElFormItem>
-        <ElFormItem label="药品名称" prop="drugName">
-          <ElSelect
-            v-model="orderForm.drugName"
-            filterable
-            placeholder="请搜索选择药品"
-            style="width: 100%"
-          >
-            <ElOption
-              v-for="drug in DRUG_SEARCH_OPTIONS"
-              :key="drug.value"
-              :label="drug.label"
-              :value="drug.value"
-            />
-          </ElSelect>
+        <ElFormItem label="药品名称" prop="DrugName">
+          <ElInput
+            v-model="orderForm.DrugName"
+            placeholder="请输入药品名称"
+          />
         </ElFormItem>
-        <ElFormItem label="剂量" prop="dosage">
+        <ElFormItem label="剂量" prop="Dosage">
           <div class="dosage-row">
-            <ElInput v-model="orderForm.dosage" placeholder="请输入剂量" style="flex: 1" />
-            <ElSelect v-model="orderForm.unit" style="width: 100px; margin-left: 8px">
+            <ElInput v-model="orderForm.Dosage" placeholder="请输入剂量" style="flex: 1" />
+            <ElSelect v-model="orderForm.Unit" style="width: 100px; margin-left: 8px">
               <ElOption
                 v-for="item in UNIT_OPTIONS"
                 :key="item.value"
@@ -1028,8 +1173,8 @@ onMounted(() => {
             </ElSelect>
           </div>
         </ElFormItem>
-        <ElFormItem label="频率" prop="frequency">
-          <ElSelect v-model="orderForm.frequency" placeholder="请选择频率" style="width: 100%">
+        <ElFormItem label="频率" prop="Frequency">
+          <ElSelect v-model="orderForm.Frequency" placeholder="请选择频率" style="width: 100%">
             <ElOption
               v-for="item in FREQUENCY_OPTIONS"
               :key="item.value"
@@ -1038,8 +1183,8 @@ onMounted(() => {
             />
           </ElSelect>
         </ElFormItem>
-        <ElFormItem label="用法" prop="usage">
-          <ElSelect v-model="orderForm.usage" placeholder="请选择用法" style="width: 100%">
+        <ElFormItem label="用法" prop="Usage">
+          <ElSelect v-model="orderForm.Usage" placeholder="请选择用法" style="width: 100%">
             <ElOption
               v-for="item in USAGE_OPTIONS"
               :key="item.value"
@@ -1050,7 +1195,7 @@ onMounted(() => {
         </ElFormItem>
         <ElFormItem label="备注">
           <ElInput
-            v-model="orderForm.remark"
+            v-model="orderForm.Remark"
             type="textarea"
             :rows="2"
             placeholder="请输入备注（选填）"
@@ -1223,6 +1368,57 @@ onMounted(() => {
   gap: 4px;
 }
 
+/* ==================== 处方单列表 ==================== */
+
+.prescription-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.prescription-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #f5f7fa;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.prescription-item:hover {
+  background: #ecf5ff;
+  border-color: #409eff;
+}
+
+.prescription-item--active {
+  background: #409eff;
+  border-color: #409eff;
+  color: #fff;
+}
+
+.prescription-item--active .prescription-no {
+  color: #fff;
+}
+
+.prescription-no {
+  font-weight: 600;
+  color: #303133;
+}
+
+.delete-prescription {
+  margin-left: 4px;
+  padding: 2px 6px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.delete-prescription:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
 /* ==================== 过敏记录 ==================== */
 
 .allergy-card :deep(.el-card__header) {
@@ -1353,6 +1549,20 @@ onMounted(() => {
 
 .stopped-table :deep(.el-table__body tr) {
   background-color: #fafafa;
+}
+
+/* 行状态样式 */
+:deep(.disabled-row) {
+  background-color: #f5f7fa;
+  color: #c0c4cc;
+}
+
+:deep(.unexecuted-row) {
+  background-color: #ffffcc;
+}
+
+:deep(.red-row) {
+  color: #f56c6c;
 }
 
 /* ==================== 折叠面板 ==================== */

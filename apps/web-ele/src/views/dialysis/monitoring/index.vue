@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue';
 import { Page } from '@vben/common-ui';
 import {
   ElButton,
@@ -18,91 +18,167 @@ import {
   ElTooltip,
   ElEmpty,
   ElCard,
+  ElDatePicker,
+  ElTable,
+  ElTableColumn,
+  ElPagination,
 } from 'element-plus';
 import type { FormInstance, FormRules } from 'element-plus';
+import { requestClient } from '#/api/request';
 
 // ==================== 类型定义 ====================
 
-/** 签到状态枚举 */
-enum SignStatus {
-  Pending = 0,    // 待签到
-  SignedIn = 5,   // 已签到
-  Dialyzing = 10, // 透析中
-  Completed = 15, // 已完成
-  OffMachine = 20, // 下机
+/** 患者签到状态枚举 */
+enum CurrentState {
+  Pending = 2,      // 待排床
+  Ready = 3,        // 待签到
+  SignedIn = 4,     // 已签到
+  Dialyzing = 5,    // 透析中
+  OffMachine = 6,   // 下机
 }
 
-/** 已签到患者列表项 */
-interface SignedPatient {
-  patientId: string;
-  patientName: string;
-  gender: string;
-  age: number;
-  patientNo: string;
-  bedNo: string;
-  treatmentArea: string;
-  treatmentMode: string;
-  state: SignStatus;
-  bloodInfectious: string;
-  signInTime?: string;
+/** 签到列表项 - 使用原系统字段名 */
+interface SignInPatient {
+  Id: string;
+  PatientId: string;
+  PatientName: string;
+  Sex: string;
+  Age: number;
+  PatientNo: string;
+  PatientFileNo: string;
+  SickbedNo: string;
+  EquipmentSerialNumber: string;
+  TreatmentRegion: string;
+  TreatmentRegionId: string;
+  ActualShift: string;
+  ActualDialysisType: string;
+  ActualDialyzer: string;
+  ActualDialysisPerfusion: string;
+  CurrentState: CurrentState;
+  CurrentDryWeight: number;
+  CurrentBeforeDialysisWeight: number | null;
+  CurrentAfterDialysisWeight: number | null;
+  PostWeight: number | null;
+  displayPostWeight: number | null;
+  UltraFilRate: number;
+  PreSystolicPressure: number;
+  PreDiastolicPressure: number;
+  PostSystolicPressure: number;
+  PostDiastolicPressure: number;
+  ObserveSystolicPressure: number;
+  ObserveDiastolicPressure: number;
+  BloodBorneDisease: string;
+  BloodBorneDiseaseId: string;
+  Date: string;
+  DialysisId: string;
+  SignId: string;
+  PatientCycleSchedulingId: string;
+  EquipmentId: string;
+  DialysisTypeId: string;
+  PatientTreatmentRegion: string;
+  LoginTime: string;
+  LeftTime: string;
+  TreatHour: number;
+  TreatMin: number;
+  SchedulingUserName: string;
+  SchedulingBedUserName: string;
+  RejectPrescriptionDetails: any[];
+  NoWeightBasis: string;
+  showWeightFlag: number;
+  postNoWeightBasis: string;
+  formatAnticoagulants: string[];
+  Anticoagulants: string;
+  AnticoagulantsFirstDose: number;
+  AnticoagulantsBolus: number;
+  AnticoagulantsUnitId: string;
+  AnticoagulantGroup: string;
+  ClothingWeight: number;
+  PostPreTreatMessageId: string;
+  DefineColor: string;
+  IsFocus: boolean;
+  FeatureByPhot: string;
 }
 
-/** 患者详细信息 */
+/** 患者基本信息 */
 interface PatientInfo {
-  patientId: string;
-  patientName: string;
-  gender: string;
-  age: number;
-  patientNo: string;
-  treatmentArea: string;
-  bedNo: string;
-  treatmentMode: string;
-  dialyzer: string;
-  anticoagulant: string;
-  anticoagulantFirstDose: string;
-  anticoagulantAdditionalDose: string;
-  vascularAccess: string;
-  allergyRecord: string;
-  mainDiagnosis: string;
-  dryWeight: number;
+  PatientId: string;
+  PatientName: string;
+  Sex: string;
+  Age: number;
+  PatientNo: string;
+  TreatmentRegion: string;
+  SickbedNo: string;
+  ActualDialysisType: string;
+  Dialyzer: string;
+  Anticoagulants: string;
+  AnticoagulantsFirstDose: string;
+  AnticoagulantsBolus: string;
+  BloodAccess: string;
+  AllergyRecord: string;
+  MainDiagnosis: string;
+  CurrentDryWeight: number;
 }
 
 /** 透析处方信息 */
 interface DialysisPrescription {
-  treatmentTime: string;
-  bloodFlowRate: string;
-  dialysateFlowRate: string;
-  ultrafiltrationVolume: string;
-  targetWeightLoss: string;
-  dialysateTemperature: string;
-  anticoagulantFirstDose: string;
-  anticoagulantAdditionalDose: string;
+  TreatHour: number;
+  TreatMin: number;
+  BloodFlowRate: string;
+  DialysateFlowRate: string;
+  UltraFilRate: number;
+  TargetWeightLoss: string;
+  DialysateTemperature: string;
+  AnticoagulantsFirstDose: string;
+  AnticoagulantsBolus: string;
 }
 
-/** 签到表单 */
-interface SignInForm {
-  preWeight: number | undefined;
-  systolicBP: number | undefined;
-  diastolicBP: number | undefined;
-  heartRate: number | undefined;
-  temperature: number | undefined;
-  remark: string;
+/** 班次选项 */
+interface ShiftOption {
+  ShiftName: string;
 }
 
-/** 干体重调整表单 */
-interface DryWeightForm {
-  currentDryWeight: number;
-  newDryWeight: number | undefined;
-  reason: string;
+/** 分区选项 */
+interface RegionOption {
+  Id: string;
+  Name: string;
 }
 
-/** 传染病检查记录 */
-interface InfectiousRecord {
-  id: string;
-  itemName: string;
-  result: string;
-  checkDate: string;
-  reportDate: string;
+/** 患者类型选项 */
+interface PatientTypeOption {
+  Id: string;
+  Name: string;
+}
+
+/** 透析模式选项 */
+interface DialysisTypeOption {
+  Id: string;
+  Value: string;
+}
+
+/** 床位选项 */
+interface BedOption {
+  EquipmentId: string;
+  SickbedNo: string;
+  TreatmentRegion: string;
+}
+
+/** 干体重历史记录 */
+interface DryWeightHistory {
+  DryWeight: number;
+  DryWeightSetDate: string;
+}
+
+/** 传染病检查信息 */
+interface InfectionDetail {
+  PatientId: string;
+  RemindType: number;
+  CategoryDisplayName: string;
+  NextCheckDays: number;
+  newCheckDate: string;
+  NextCheckDate: string;
+  OutResult: number;
+  SourceCheckDate: string;
+  SourceTransferDate: string;
 }
 
 // ==================== 常量 ====================
@@ -120,385 +196,626 @@ const AREA_OPTIONS = [
   { label: '四区', value: '四区' },
 ];
 
-/** 签到状态标签配置 */
-const STATUS_TAG_MAP: Record<
-  SignStatus,
-  { label: string; type: '' | 'success' | 'warning' | 'danger' | 'info' }
-> = {
-  [SignStatus.Pending]: { label: '待签到', type: 'info' },
-  [SignStatus.SignedIn]: { label: '已签到', type: 'success' },
-  [SignStatus.Dialyzing]: { label: '透析中', type: '' },
-  [SignStatus.Completed]: { label: '已完成', type: 'success' },
-  [SignStatus.OffMachine]: { label: '下机', type: 'warning' },
+const SIGN_STATUS_OPTIONS = [
+  { label: '全部', value: '全部' },
+  { label: '未签到', value: '未签到' },
+  { label: '已签到', value: '已签到' },
+];
+
+const SORT_OPTIONS = [
+  { label: '按床位排序', value: '1' },
+  { label: '按姓名排序', value: '2' },
+  { label: '按称重时间排序', value: '3' },
+  { label: '按患者编号排序', value: '4' },
+  { label: '按已称重未签到排序', value: '5' },
+];
+
+/** 状态标签配置 */
+const STATUS_TAG_MAP: Record<number, { label: string; type: '' | 'success' | 'warning' | 'danger' | 'info' }> = {
+  [CurrentState.Pending]: { label: '待排床', type: 'info' },
+  [CurrentState.Ready]: { label: '待签到', type: 'warning' },
+  [CurrentState.SignedIn]: { label: '已签到', type: 'success' },
+  [CurrentState.Dialyzing]: { label: '透析中', type: '' },
+  [CurrentState.OffMachine]: { label: '下机', type: 'danger' },
 };
 
 // ==================== 状态 ====================
 
 const loading = ref(false);
+const loading2 = ref(false);
 
-// 左栏
-const leftCollapsed = ref(false);
-const searchKeyword = ref('');
-const filterArea = ref('');
+// 搜索和筛选
+const patNameSearchVal = ref('');
+const selectDay = ref<Date>(new Date());
+const PxType = ref('1');
+const myShift = ref('全部');
+const myFq = ref('全部');
+const TreatmentRegionDetail = ref('全部');
+const signStatus = ref('全部');
+const PatientType = ref('全部');
 
-// 中栏
-const currentDateTime = ref('');
-const currentShift = ref('上午');
+// 数据列表
+const tableData = ref<SignInPatient[]>([]);
+const bcData = ref<ShiftOption[]>([]);
+const FqData = ref<RegionOption[]>([]);
+const FqChildData = ref<RegionOption[]>([]);
+const PatientTypeList = ref<PatientTypeOption[]>([]);
+const txqDataNew = ref<DialysisTypeOption[]>([]);
+const checkInfectionList = ref<InfectionDetail[]>([]);
+
+// 选中的患者
+const selectedPatient = ref<SignInPatient | null>(null);
 const selectedPatientId = ref<string | null>(null);
-const dateTimeTimer = ref<ReturnType<typeof setInterval> | null>(null);
 
-// 患者列表
-const patientList = ref<SignedPatient[]>([]);
-
-// 选中患者详情
-const selectedPatient = ref<SignedPatient | null>(null);
+// 患者详情
 const patientInfo = ref<PatientInfo | null>(null);
 const prescriptionInfo = ref<DialysisPrescription | null>(null);
 
+// 排班弹窗
+const shiftShow = ref(false);
+const tempshiftShow = ref(false);
+const shiftData = reactive({
+  Date: '',
+  Shift: '',
+  DialysisType: '',
+  Dialyzer: '',
+  DialysisPerfusion: '',
+  SickbedNo: '',
+  EquipmentId: '',
+  PatientId: '',
+});
+const bedNoArr = ref<BedOption[]>([]);
+const DialyzerArr = ref<{ Name: string; IsSelect: boolean }[]>([]);
+const DialysisPerfusionArr = ref<{ Value: string; IsSelect: boolean }[]>([]);
+const rowValue = ref<SignInPatient | null>(null);
+
+// 分区修改弹窗
+const RegionShow = ref(false);
+const RegionVal = ref<SignInPatient | null>(null);
+const TreatmentRegionId = ref('');
+
+// 干体重调整弹窗
+const changeShow = ref(false);
+const CurrentDryWeight = ref<number | null>(null);
+const rowVal = ref<SignInPatient | null>(null);
+const his_list = ref<DryWeightHistory[]>([]);
+
+// 未测体重签到弹窗
+const NoWeightShow = ref(false);
+const NoWeightWhyVal = ref<SignInPatient | null>(null);
+const NoWeightBasis = ref('');
+
 // 签到表单
 const signInFormRef = ref<FormInstance>();
-const signInForm = reactive<SignInForm>({
-  preWeight: undefined,
-  systolicBP: undefined,
-  diastolicBP: undefined,
-  heartRate: undefined,
-  temperature: undefined,
-  remark: '',
+const signInForm = reactive({
+  CurrentBeforeDialysisWeight: undefined as number | undefined,
+  PreSystolicPressure: undefined as number | undefined,
+  PreDiastolicPressure: undefined as number | undefined,
+  HeartRate: undefined as number | undefined,
+  Temperature: undefined as number | undefined,
+  Remark: '',
 });
 
-const signInFormRules: FormRules<SignInForm> = {
-  preWeight: [
+const signInFormRules: FormRules = {
+  CurrentBeforeDialysisWeight: [
     { required: true, message: '请输入透析前体重', trigger: 'blur' },
-    { type: 'number', min: 20, max: 200, message: '体重范围 20-200kg', trigger: 'blur' },
+    { type: 'number', min: 0, max: 200, message: '体重范围 0-200kg', trigger: 'blur' },
   ],
-  systolicBP: [
+  PreSystolicPressure: [
     { type: 'number', min: 60, max: 260, message: '收缩压范围 60-260mmHg', trigger: 'blur' },
   ],
-  diastolicBP: [
+  PreDiastolicPressure: [
     { type: 'number', min: 30, max: 160, message: '舒张压范围 30-160mmHg', trigger: 'blur' },
   ],
-  heartRate: [
+  HeartRate: [
     { type: 'number', min: 30, max: 200, message: '心率范围 30-200次/分', trigger: 'blur' },
   ],
-  temperature: [
+  Temperature: [
     { type: 'number', min: 34, max: 42, message: '体温范围 34-42°C', trigger: 'blur' },
   ],
 };
 
-// 弹窗
-const dryWeightDialogVisible = ref(false);
-const dryWeightFormRef = ref<FormInstance>();
-const dryWeightForm = reactive<DryWeightForm>({
-  currentDryWeight: 0,
-  newDryWeight: undefined,
-  reason: '',
+// 传染病详情弹窗
+const showInfectionDetails = ref(false);
+const infectionPatientName = ref('');
+const infectionDetail = ref<Partial<InfectionDetail>>({});
+
+// 定时刷新
+const loadTime = ref(5);
+const autoLaodC = ref('default');
+const loadQ = ref(false);
+let qrT: ReturnType<typeof setInterval> | null = null;
+
+// 权限控制
+const pbshow = ref(true);
+const pbshow2 = ref(true);
+const lockState = ref(false);
+
+// 列表类型
+const listType = ref('表格');
+
+// 列配置
+const columns = ref([
+  { title: '姓名', key: 'PatientName', width: 120 },
+  { title: '床号', key: 'SickbedNo', width: 80 },
+  { title: '机器编号', key: 'EquipmentSerialNumber', width: 80 },
+  { title: '分区', key: 'TreatmentRegion', width: 80 },
+  { title: '班次', key: 'ActualShift', width: 60 },
+  { title: '治疗模式', key: 'ActualDialysisType', width: 100 },
+  { title: '透析器', key: 'ActualDialyzer', width: 100 },
+  { title: '灌流器', key: 'ActualDialysisPerfusion', width: 100 },
+  { title: '抗凝剂', key: 'formatAnticoagulants', width: 100 },
+  { title: '干体重', key: 'CurrentDryWeight', minWidth: 60 },
+  { title: '本次透前称重&最新血压', key: 'CurrentBeforeDialysisWeight', minWidth: 156 },
+  { title: '透后体重&血压', key: 'CurrentAfterDialysisWeight', minWidth: 156 },
+  { title: '超滤量', key: 'UltraFilRate', minWidth: 65 },
+  { title: '排班', key: 'SchedulingUserName', minWidth: 55 },
+  { title: '排床', key: 'SchedulingBedUserName', minWidth: 55 },
+  { title: '操作', key: 'Action', width: 140 },
+]);
+
+// ==================== 计算属性 ====================
+
+/** 筛选后的患者列表 */
+const filterTabData = computed(() => {
+  let arr = tableData.value;
+  if (patNameSearchVal.value) {
+    arr = arr.filter((item) =>
+      item.PatientName?.includes(patNameSearchVal.value)
+    );
+  }
+  if (signStatus.value === '未签到') {
+    arr = arr.filter((item) => item.CurrentState < 4);
+  } else if (signStatus.value === '已签到') {
+    arr = arr.filter((item) => item.CurrentState >= 4);
+  }
+  return arr;
 });
 
-const infectiousDialogVisible = ref(false);
-const infectiousRecords = ref<InfectiousRecord[]>([]);
+/** 统计数据 */
+const stats = computed(() => {
+  const total = tableData.value.length;
+  const signed = tableData.value.filter((p) => p.CurrentState >= 4).length;
+  const pending = tableData.value.filter((p) => p.CurrentState < 4).length;
+  const dialyzing = tableData.value.filter((p) => p.CurrentState === 5).length;
+  return { total, signed, pending, dialyzing };
+});
 
-// ==================== API 配置 ====================
+/** 是否选中待签到患者 */
+const isSelectedPending = computed(() => {
+  return selectedPatient.value && selectedPatient.value.CurrentState < 4;
+});
 
-function getHeaders() {
-  return {
-    hdToken: sessionStorage.getItem('hdToken') || '',
-    hdUserName: sessionStorage.getItem('hdUserName') || '',
-    hdOrgId: sessionStorage.getItem('hdOrgId') || '',
-    hdOrgAuthCode: sessionStorage.getItem('hdOrgAuthCode') || '',
-    hdEmpDepartment: sessionStorage.getItem('hdEmpDepartment') || '',
-    ClientType: 'Web',
-  };
-}
+/** 是否选中已签到患者 */
+const isSelectedSignedIn = computed(() => {
+  return selectedPatient.value && selectedPatient.value.CurrentState >= 4;
+});
 
-// ==================== API 调用（已注释，使用mock数据） ====================
+// ==================== API 调用 ====================
 
-// import axios from 'axios';
-
-// /** 获取已签到患者列表 */
-// async function fetchSignedPatients() {
-//   loading.value = true;
-//   try {
-//     const res = await axios.get('/api/v1/SignInManage/4001', {
-//       params: { Shift: currentShift.value, Area: filterArea.value },
-//       headers: getHeaders(),
-//     });
-//     if (res.data?.Code === 200) {
-//       patientList.value = res.data.Data ?? [];
-//     }
-//   } finally {
-//     loading.value = false;
-//   }
-// }
-
-// /** 确认签到 */
-// async function confirmSignIn(data: SignInForm) {
-//   const res = await axios.post('/api/v1/SignInManage/1001', {
-//     PatientId: selectedPatientId.value,
-//     PreWeight: data.preWeight,
-//     SystolicBP: data.systolicBP,
-//     DiastolicBP: data.diastolicBP,
-//     HeartRate: data.heartRate,
-//     Temperature: data.temperature,
-//     Remark: data.remark,
-//   }, { headers: getHeaders() });
-//   return res.data;
-// }
-
-// /** 获取患者信息 */
-// async function fetchPatientInfo(patientId: string) {
-//   const res = await axios.get('/api/v1/OpenDoctorAdvice/4003', {
-//     params: { PatientId: patientId },
-//     headers: getHeaders(),
-//   });
-//   if (res.data?.Code === 200) {
-//     patientInfo.value = res.data.Data;
-//   }
-// }
-
-// /** 获取诊断信息 */
-// async function fetchDiagnosisInfo(patientId: string) {
-//   const res = await axios.get('/api/v1/CaseHomePage/4001', {
-//     params: { PatientId: patientId },
-//     headers: getHeaders(),
-//   });
-//   if (res.data?.Code === 200) {
-//     // 合并诊断信息到 patientInfo
-//   }
-// }
-
-// /** 获取排班信息 */
-// async function fetchScheduleInfo() {
-//   const res = await axios.get('/api/v1/SchedulingManage/4017', {
-//     headers: getHeaders(),
-//   });
-//   if (res.data?.Code === 200) {
-//     // 更新排班相关数据
-//   }
-// }
-
-// ==================== Mock 数据 ====================
-
-function generateMockPatients(): SignedPatient[] {
-  return [
-    {
-      patientId: 'P10001', patientName: '张三', gender: '男', age: 58,
-      patientNo: '2024001001', bedNo: '1号床', treatmentArea: '一区',
-      treatmentMode: 'HD', state: SignStatus.SignedIn, bloodInfectious: '乙肝',
-      signInTime: '2026-05-11 07:35',
-    },
-    {
-      patientId: 'P10002', patientName: '李四', gender: '女', age: 45,
-      patientNo: '2024001002', bedNo: '2号床', treatmentArea: '一区',
-      treatmentMode: 'HDF', state: SignStatus.Dialyzing, bloodInfectious: '',
-      signInTime: '2026-05-11 07:40',
-    },
-    {
-      patientId: 'P10003', patientName: '王五', gender: '男', age: 62,
-      patientNo: '2024001003', bedNo: '3号床', treatmentArea: '一区',
-      treatmentMode: 'HD+HP', state: SignStatus.Pending, bloodInfectious: '丙肝',
-    },
-    {
-      patientId: 'P10004', patientName: '赵六', gender: '男', age: 71,
-      patientNo: '2024001004', bedNo: '4号床', treatmentArea: '二区',
-      treatmentMode: 'HD', state: SignStatus.Completed, bloodInfectious: '',
-      signInTime: '2026-05-11 07:50',
-    },
-    {
-      patientId: 'P10005', patientName: '钱七', gender: '女', age: 53,
-      patientNo: '2024001005', bedNo: '5号床', treatmentArea: '二区',
-      treatmentMode: 'CRRT', state: SignStatus.OffMachine, bloodInfectious: 'HIV',
-      signInTime: '2026-05-11 07:55',
-    },
-    {
-      patientId: 'P10006', patientName: '孙八', gender: '男', age: 39,
-      patientNo: '2024001006', bedNo: '7号床', treatmentArea: '三区',
-      treatmentMode: 'HF', state: SignStatus.SignedIn, bloodInfectious: '',
-      signInTime: '2026-05-11 08:00',
-    },
-    {
-      patientId: 'P10007', patientName: '周九', gender: '女', age: 67,
-      patientNo: '2024001007', bedNo: '10号床', treatmentArea: '三区',
-      treatmentMode: 'HDF', state: SignStatus.Pending, bloodInfectious: '梅毒',
-    },
-    {
-      patientId: 'P10008', patientName: '吴十', gender: '男', age: 44,
-      patientNo: '2024001008', bedNo: '11号床', treatmentArea: '四区',
-      treatmentMode: 'HD', state: SignStatus.Dialyzing, bloodInfectious: '',
-      signInTime: '2026-05-11 08:10',
-    },
-    {
-      patientId: 'P10009', patientName: '郑十一', gender: '女', age: 56,
-      patientNo: '2024001009', bedNo: '12号床', treatmentArea: '四区',
-      treatmentMode: 'HD', state: SignStatus.Pending, bloodInfectious: '乙肝',
-    },
-    {
-      patientId: 'P10010', patientName: '冯十二', gender: '男', age: 68,
-      patientNo: '2024001010', bedNo: '13号床', treatmentArea: '四区',
-      treatmentMode: 'HD+HP', state: SignStatus.SignedIn, bloodInfectious: '',
-      signInTime: '2026-05-11 08:15',
-    },
+/** 获取系统字典数据 */
+async function loadMenu() {
+  const typeIds = [
+    { typeId: 'e24f4c400b274d229d7d6b5498f9bea8' },
+    { typeId: '6d44c940094e47748380002db1ea8cf1' },
+    { typeId: 'c0ec599396f94e8b9d808f17783bf49e' },
+    { typeId: '3741c81ad02c42adaf12de523cf73d43' },
+    { typeId: '40742936d4fb464b8f63ce719190782d' },
+    { typeId: 'f5abc3fb7fa74532994113531c1fd065' },
+    { typeId: '02a89c9dd3c64b31b807f2e8e912dfd5' },
+    { typeId: 'd4fd6f79ff5b412dbc0f5ce3bc6ef7d2' },
+    { typeId: 'a056c9a05f0041fcb6f71cd0f10e9ae2' },
+    { typeId: 'b593d5e9890d49c9b8a429e44136da94' },
+    { typeId: 'f74335ed3a7140838fc18b0b2517307a' },
+    { typeId: '1f6cff3e66064101a8fcfd57036df07b' },
+    { typeId: '320dae4786fa467fa10fc14302906d02' },
+    { typeId: '0c09ff442f7f4164985502ba1b038b42' },
+    { typeId: '9364d9b7b019426a96c61822adcecdeb' },
+    { typeId: '5189c272d88b4e50ae636d2e9ca694dc' },
+    { typeId: '0894eef655284f0bb4840f2db089527d' },
+    { typeId: 'bd1716eacc88465588324b680fcf7570' },
+    { typeId: '21475ef3ced24b54a65b69bf7b69596f' },
+    { typeId: '4b6feb8247374ae69409098260041591' },
   ];
+  const res = await requestClient.get('SystemDictionary/4006', { params: { data: JSON.stringify(typeIds) } });
+  if (res) {
+    const data = res as any[];
+    txqDataNew.value = data[14]?.SystemDictionaryList || [];
+    FqData.value = data[17]?.SystemDictionaryList || [];
+    PatientTypeList.value = data[18]?.SystemDictionaryList || [];
+    FqChildData.value = data[19]?.SystemDictionaryList || [];
+  }
+  PatientShiftSet();
 }
 
-function generateMockPatientInfo(patientId: string): PatientInfo {
-  const infoMap: Record<string, PatientInfo> = {
-    P10001: {
-      patientId: 'P10001', patientName: '张三', gender: '男', age: 58,
-      patientNo: '2024001001', treatmentArea: '一区', bedNo: '1号床',
-      treatmentMode: 'HD', dialyzer: 'FX80', anticoagulant: '低分子肝素',
-      anticoagulantFirstDose: '4000IU', anticoagulantAdditionalDose: '追加 2000IU/4h',
-      vascularAccess: '动静脉内瘘（左前臂）', allergyRecord: '青霉素过敏',
-      mainDiagnosis: '慢性肾脏病5期、肾性贫血、肾性骨病',
-      dryWeight: 68.5,
-    },
-    P10002: {
-      patientId: 'P10002', patientName: '李四', gender: '女', age: 45,
-      patientNo: '2024001002', treatmentArea: '一区', bedNo: '2号床',
-      treatmentMode: 'HDF', dialyzer: 'FX100', anticoagulant: '普通肝素',
-      anticoagulantFirstDose: '2000IU', anticoagulantAdditionalDose: '追加 1000IU/4h',
-      vascularAccess: '中心静脉导管（右颈内）', allergyRecord: '无',
-      mainDiagnosis: '慢性肾脏病5期、糖尿病肾病',
-      dryWeight: 55.0,
-    },
-    P10003: {
-      patientId: 'P10003', patientName: '王五', gender: '男', age: 62,
-      patientNo: '2024001003', treatmentArea: '一区', bedNo: '3号床',
-      treatmentMode: 'HD+HP', dialyzer: 'F60S', anticoagulant: '低分子肝素',
-      anticoagulantFirstDose: '5000IU', anticoagulantAdditionalDose: '追加 2500IU/4h',
-      vascularAccess: '动静脉内瘘（右前臂）', allergyRecord: '无',
-      mainDiagnosis: '慢性肾脏病5期、高血压肾病',
-      dryWeight: 72.0,
-    },
-    P10004: {
-      patientId: 'P10004', patientName: '赵六', gender: '男', age: 71,
-      patientNo: '2024001004', treatmentArea: '二区', bedNo: '4号床',
-      treatmentMode: 'HD', dialyzer: 'F80S', anticoagulant: '无肝素',
-      anticoagulantFirstDose: '-', anticoagulantAdditionalDose: '-',
-      vascularAccess: '人造血管（左上臂）', allergyRecord: '磺胺类药物过敏',
-      mainDiagnosis: '慢性肾脏病5期、冠心病',
-      dryWeight: 65.0,
-    },
-    P10005: {
-      patientId: 'P10005', patientName: '钱七', gender: '女', age: 53,
-      patientNo: '2024001005', treatmentArea: '二区', bedNo: '5号床',
-      treatmentMode: 'CRRT', dialyzer: 'Polyflux 17L', anticoagulant: '局部枸橼酸',
-      anticoagulantFirstDose: '200ml/h', anticoagulantAdditionalDose: '-',
-      vascularAccess: '中心静脉导管（右股静脉）', allergyRecord: '头孢类过敏',
-      mainDiagnosis: '急性肾损伤、脓毒症',
-      dryWeight: 58.0,
-    },
-    P10006: {
-      patientId: 'P10006', patientName: '孙八', gender: '男', age: 39,
-      patientNo: '2024001006', treatmentArea: '三区', bedNo: '7号床',
-      treatmentMode: 'HF', dialyzer: 'FX80', anticoagulant: '低分子肝素',
-      anticoagulantFirstDose: '4000IU', anticoagulantAdditionalDose: '追加 2000IU/4h',
-      vascularAccess: '动静脉内瘘（左前臂）', allergyRecord: '无',
-      mainDiagnosis: '慢性肾脏病5期、IgA肾病',
-      dryWeight: 75.0,
-    },
-    P10007: {
-      patientId: 'P10007', patientName: '周九', gender: '女', age: 67,
-      patientNo: '2024001007', treatmentArea: '三区', bedNo: '10号床',
-      treatmentMode: 'HDF', dialyzer: 'FX100', anticoagulant: '普通肝素',
-      anticoagulantFirstDose: '1500IU', anticoagulantAdditionalDose: '追加 750IU/4h',
-      vascularAccess: '直接穿刺（右桡动脉）', allergyRecord: '无',
-      mainDiagnosis: '慢性肾脏病5期、高血压肾病、肾性贫血',
-      dryWeight: 52.0,
-    },
-    P10008: {
-      patientId: 'P10008', patientName: '吴十', gender: '男', age: 44,
-      patientNo: '2024001008', treatmentArea: '四区', bedNo: '11号床',
-      treatmentMode: 'HD', dialyzer: 'FX80', anticoagulant: '低分子肝素',
-      anticoagulantFirstDose: '4000IU', anticoagulantAdditionalDose: '追加 2000IU/4h',
-      vascularAccess: '动静脉内瘘（右前臂）', allergyRecord: '无',
-      mainDiagnosis: '慢性肾脏病5期',
-      dryWeight: 70.0,
-    },
-    P10009: {
-      patientId: 'P10009', patientName: '郑十一', gender: '女', age: 56,
-      patientNo: '2024001009', treatmentArea: '四区', bedNo: '12号床',
-      treatmentMode: 'HD', dialyzer: 'F60S', anticoagulant: '低分子肝素',
-      anticoagulantFirstDose: '3000IU', anticoagulantAdditionalDose: '追加 1500IU/4h',
-      vascularAccess: '中心静脉导管（左颈内）', allergyRecord: '无',
-      mainDiagnosis: '慢性肾脏病5期、糖尿病肾病、视网膜病变',
-      dryWeight: 60.0,
-    },
-    P10010: {
-      patientId: 'P10010', patientName: '冯十二', gender: '男', age: 68,
-      patientNo: '2024001010', treatmentArea: '四区', bedNo: '13号床',
-      treatmentMode: 'HD+HP', dialyzer: 'F60S', anticoagulant: '低分子肝素',
-      anticoagulantFirstDose: '4000IU', anticoagulantAdditionalDose: '追加 2000IU/4h',
-      vascularAccess: '动静脉内瘘（左前臂）', allergyRecord: '无',
-      mainDiagnosis: '慢性肾脏病5期、多囊肾',
-      dryWeight: 78.0,
-    },
-  };
-  return infoMap[patientId] || infoMap['P10001']!;
+/** 获取班次设置 */
+async function PatientShiftSet() {
+  const selectday = formatDate(selectDay.value);
+  const res = await requestClient.get('PatientShiftSet/4002', {
+    params: { Date: selectday },
+  });
+  if (res) {
+    bcData.value = res as ShiftOption[];
+  }
 }
 
-function generateMockPrescription(patientId: string): DialysisPrescription {
-  const base: DialysisPrescription = {
-    treatmentTime: '4小时',
-    bloodFlowRate: '250ml/min',
-    dialysateFlowRate: '500ml/min',
-    ultrafiltrationVolume: '2000ml',
-    targetWeightLoss: '2.0kg',
-    dialysateTemperature: '36.5°C',
-    anticoagulantFirstDose: '4000IU',
-    anticoagulantAdditionalDose: '追加 2000IU/4h',
+/** 查询签到列表 */
+async function queryList(showLoading = true) {
+  if (showLoading) {
+    loading.value = true;
+  }
+
+  const nowday = formatDate(new Date());
+  const selectday = formatDate(selectDay.value);
+
+  // 判断是否过期
+  pbshow.value = !(nowday > selectday && !sessionStorage.getItem('gengxin'));
+  pbshow2.value = nowday === selectday;
+
+  const params = {
+    Date: selectday,
+    Shift: myShift.value === '全部' ? '' : myShift.value,
+    PatientType: PatientType.value === '全部' ? '' : PatientType.value,
+    TreatmentRegion: myFq.value === '全部' ? '' : myFq.value,
+    OrderType: PxType.value,
+    TreatmentRegionDetail: TreatmentRegionDetail.value === '全部' ? '' : TreatmentRegionDetail.value,
   };
 
-  const overrides: Partial<Record<string, DialysisPrescription>> = {
-    P10002: { treatmentTime: '4.5小时', bloodFlowRate: '280ml/min', ultrafiltrationVolume: '2500ml', targetWeightLoss: '2.5kg' },
-    P10003: { treatmentTime: '4小时', bloodFlowRate: '230ml/min', ultrafiltrationVolume: '3000ml', targetWeightLoss: '3.0kg' },
-    P10005: { treatmentTime: '24小时', bloodFlowRate: '200ml/min', dialysateFlowRate: '-', ultrafiltrationVolume: '1000ml/h', targetWeightLoss: '-', dialysateTemperature: '37.0°C', anticoagulantFirstDose: '200ml/h', anticoagulantAdditionalDose: '-' },
-    P10006: { treatmentTime: '4小时', bloodFlowRate: '260ml/min', ultrafiltrationVolume: '1800ml', targetWeightLoss: '1.8kg' },
-  };
+  try {
+    const res = await requestClient.get('SchedulingManage/4017', { params });
+    loading.value = false;
 
-  return overrides[patientId] ? { ...base, ...overrides[patientId] } : base;
+    if (res) {
+      const data = (res as SignInPatient[]).map((item) => {
+        const formatAnticoagulants: string[] = [];
+        const {
+          Anticoagulants,
+          AnticoagulantsFirstDose,
+          AnticoagulantsBolus,
+          AnticoagulantsUnitId,
+          AnticoagulantGroup,
+        } = item;
+
+        const handleFormatAnticoagulants = (anticoagulantsList: any[]) => {
+          anticoagulantsList.forEach((acItem) => {
+            const {
+              Anticoagulants: AcName,
+              AnticoagulantsFirstDose: AcFirst,
+              AnticoagulantsBolus: AcBolus,
+              AnticoagulantsUnitId: AcUnit,
+            } = acItem;
+            const initialDose = !AcFirst || Number.isNaN(AcFirst) ? 0 : AcFirst;
+            const addDose = !AcBolus || Number.isNaN(AcBolus) ? 0 : AcBolus;
+            const totalDose = initialDose + addDose;
+            const doseUnit = AcUnit || '';
+            formatAnticoagulants.push(
+              AcName === '无肝素' ? AcName : `${AcName}(${totalDose}${doseUnit})`
+            );
+          });
+        };
+
+        const IsUsingAnticoagulants = sessionStorage.getItem('IsUsingAnticoagulants') === '1';
+        if (AnticoagulantGroup && IsUsingAnticoagulants) {
+          handleFormatAnticoagulants(JSON.parse(AnticoagulantGroup));
+        } else if (Anticoagulants) {
+          handleFormatAnticoagulants([
+            {
+              Anticoagulants,
+              AnticoagulantsFirstDose,
+              AnticoagulantsBolus,
+              AnticoagulantsUnitId,
+            },
+          ]);
+        } else {
+          formatAnticoagulants.push(Anticoagulants);
+        }
+
+        // 处理透后体重
+        let displayPostWeight = item.PostWeight;
+        const IsSubtractClothingWeight = sessionStorage.getItem('IsSubtractClothingWeight') === '1';
+        if (IsSubtractClothingWeight && item.PostWeight && item.ClothingWeight) {
+          displayPostWeight = parseFloat(String(item.PostWeight)) - parseFloat(String(item.ClothingWeight));
+        }
+
+        return {
+          ...item,
+          formatAnticoagulants,
+          showWeightFlag: item.NoWeightBasis ? 0 : 1,
+          postNoWeightBasis: item.NoWeightBasis || '',
+          displayPostWeight,
+        };
+      });
+      tableData.value = data;
+    }
+  } catch (error) {
+    loading.value = false;
+    tableData.value = [];
+  }
+
+  getCheckInfectionList();
 }
 
-function generateMockInfectiousRecords(patientId: string): InfectiousRecord[] {
-  const records: Record<string, InfectiousRecord[]> = {
-    P10001: [
-      { id: 'IR001', itemName: '乙肝表面抗原(HBsAg)', result: '阳性(+)', checkDate: '2026-04-20', reportDate: '2026-04-22' },
-      { id: 'IR002', itemName: '乙肝e抗原(HBeAg)', result: '阴性(-)', checkDate: '2026-04-20', reportDate: '2026-04-22' },
-      { id: 'IR003', itemName: '丙肝抗体(anti-HCV)', result: '阴性(-)', checkDate: '2026-04-20', reportDate: '2026-04-22' },
-      { id: 'IR004', itemName: 'HIV抗体', result: '阴性(-)', checkDate: '2026-04-20', reportDate: '2026-04-22' },
-      { id: 'IR005', itemName: '梅毒螺旋体抗体', result: '阴性(-)', checkDate: '2026-04-20', reportDate: '2026-04-22' },
-    ],
-    P10003: [
-      { id: 'IR006', itemName: '乙肝表面抗原(HBsAg)', result: '阴性(-)', checkDate: '2026-04-18', reportDate: '2026-04-20' },
-      { id: 'IR007', itemName: '丙肝抗体(anti-HCV)', result: '阳性(+)', checkDate: '2026-04-18', reportDate: '2026-04-20' },
-      { id: 'IR008', itemName: 'HIV抗体', result: '阴性(-)', checkDate: '2026-04-18', reportDate: '2026-04-20' },
-      { id: 'IR009', itemName: '梅毒螺旋体抗体', result: '阴性(-)', checkDate: '2026-04-18', reportDate: '2026-04-20' },
-    ],
-    P10005: [
-      { id: 'IR010', itemName: '乙肝表面抗原(HBsAg)', result: '阴性(-)', checkDate: '2026-05-01', reportDate: '2026-05-03' },
-      { id: 'IR011', itemName: '丙肝抗体(anti-HCV)', result: '阴性(-)', checkDate: '2026-05-01', reportDate: '2026-05-03' },
-      { id: 'IR012', itemName: 'HIV抗体', result: '阳性(+)', checkDate: '2026-05-01', reportDate: '2026-05-03' },
-      { id: 'IR013', itemName: '梅毒螺旋体抗体', result: '阴性(-)', checkDate: '2026-05-01', reportDate: '2026-05-03' },
-    ],
-    P10007: [
-      { id: 'IR014', itemName: '乙肝表面抗原(HBsAg)', result: '阴性(-)', checkDate: '2026-04-25', reportDate: '2026-04-27' },
-      { id: 'IR015', itemName: '丙肝抗体(anti-HCV)', result: '阴性(-)', checkDate: '2026-04-25', reportDate: '2026-04-27' },
-      { id: 'IR016', itemName: 'HIV抗体', result: '阴性(-)', checkDate: '2026-04-25', reportDate: '2026-04-27' },
-      { id: 'IR017', itemName: '梅毒螺旋体抗体', result: '阳性(+)', checkDate: '2026-04-25', reportDate: '2026-04-27' },
-    ],
-    P10009: [
-      { id: 'IR018', itemName: '乙肝表面抗原(HBsAg)', result: '阳性(+)', checkDate: '2026-04-28', reportDate: '2026-04-30' },
-      { id: 'IR019', itemName: '丙肝抗体(anti-HCV)', result: '阴性(-)', checkDate: '2026-04-28', reportDate: '2026-04-30' },
-      { id: 'IR020', itemName: 'HIV抗体', result: '阴性(-)', checkDate: '2026-04-28', reportDate: '2026-04-30' },
-      { id: 'IR021', itemName: '梅毒螺旋体抗体', result: '阴性(-)', checkDate: '2026-04-28', reportDate: '2026-04-30' },
-    ],
+/** 生成签到 */
+async function querySign() {
+  loading2.value = true;
+  const params = {
+    Date: formatDate(selectDay.value),
   };
+  try {
+    await requestClient.put('SchedulingManage/3001', params);
+    ElMessage.success('生成成功');
+    queryList();
+  } finally {
+    loading2.value = false;
+  }
+}
 
-  return records[patientId] || [
-    { id: 'IR_DEFAULT_1', itemName: '乙肝表面抗原(HBsAg)', result: '阴性(-)', checkDate: '2026-04-20', reportDate: '2026-04-22' },
-    { id: 'IR_DEFAULT_2', itemName: '丙肝抗体(anti-HCV)', result: '阴性(-)', checkDate: '2026-04-20', reportDate: '2026-04-22' },
-    { id: 'IR_DEFAULT_3', itemName: 'HIV抗体', result: '阴性(-)', checkDate: '2026-04-20', reportDate: '2026-04-22' },
-    { id: 'IR_DEFAULT_4', itemName: '梅毒螺旋体抗体', result: '阴性(-)', checkDate: '2026-04-20', reportDate: '2026-04-22' },
-  ];
+/** 签到 */
+async function SignClick(row: SignInPatient) {
+  if (lockState.value) return;
+
+  let weight = row.CurrentBeforeDialysisWeight;
+  if (weight !== null && weight !== undefined && weight !== '') {
+    if (isNaN(Number(weight))) {
+      ElMessage.warning('体重请输入数字！');
+      return;
+    }
+    weight = Number(weight);
+    if (weight === 0) {
+      NoWeightWhy(row);
+    } else {
+      await doSignIn(row, weight);
+    }
+  } else {
+    ElMessage.warning('体重不能为空！未测体重请填0！');
+  }
+}
+
+/** 执行签到 */
+async function doSignIn(row: SignInPatient, weight: number) {
+  lockState.value = true;
+  const params = {
+    Id: row.Id,
+    PatientId: row.PatientId,
+    CurrentBeforeDialysisWeight: weight,
+    NoWeightBasis: row.NoWeightBasis,
+  };
+  try {
+    await requestClient.put('SchedulingManage/3002', params);
+    ElMessage.success('签到成功');
+    queryList();
+  } finally {
+    lockState.value = false;
+  }
+}
+
+/** 未测体重签到 */
+function NoWeightWhy(row: SignInPatient) {
+  NoWeightWhyVal.value = row;
+  NoWeightBasis.value = row.NoWeightBasis || '';
+  NoWeightShow.value = true;
+}
+
+/** 保存未测体重原因并签到 */
+async function saveNoWeightBasis() {
+  if (!NoWeightBasis.value || NoWeightBasis.value.trim() === '') {
+    ElMessage.warning('请输入未测体重的原因！');
+    return;
+  }
+  const params = {
+    Id: NoWeightWhyVal.value?.Id,
+    NoWeightBasis: NoWeightBasis.value,
+    CurrentBeforeDialysisWeight: 0,
+  };
+  await requestClient.put('SchedulingManage/3016', params);
+  NoWeightShow.value = false;
+  if (NoWeightWhyVal.value) {
+    await doSignIn(NoWeightWhyVal.value, 0);
+  }
+}
+
+/** 删除签到 */
+async function deleteQd(id: string) {
+  try {
+    await requestClient.delete('SchedulingManage/2006', { params: { Id: id } });
+    ElMessage.success('删除成功');
+    queryList();
+  } catch (error) {
+    // 错误已在拦截器处理
+  }
+}
+
+/** 删除所有签到 */
+async function DeleteAll() {
+  try {
+    await requestClient.delete('SchedulingManage/2008', {
+      params: { Date: formatDate(selectDay.value) },
+    });
+    ElMessage.success('删除成功');
+    queryList();
+  } catch (error) {
+    // 错误已在拦截器处理
+  }
+}
+
+/** 获取干体重历史 */
+async function getHis() {
+  if (!rowVal.value) return;
+  const params = { PatientId: rowVal.value.PatientId };
+  const res = await requestClient.get('SchedulingManage/4024', { params });
+  if (res) {
+    his_list.value = res as DryWeightHistory[];
+  }
+}
+
+/** 保存干体重 */
+async function saveWeight() {
+  if (!rowVal.value || !CurrentDryWeight.value) return;
+  const params = {
+    Id: rowVal.value.Id,
+    CurrentDryWeight: CurrentDryWeight.value,
+  };
+  await requestClient.put('SchedulingManage/3011', params);
+  ElMessage.success('干体重调整成功');
+  changeShow.value = false;
+  queryList();
+}
+
+/** 获取床位列表 */
+async function getBedNo(row: SignInPatient) {
+  if (!shiftData.DialysisType) return;
+  const nowDate = row.Date ? row.Date.substring(0, 10) : formatDate(new Date());
+  const params = {
+    Date: nowDate,
+    Shift: shiftData.Shift,
+    PatientId: row.PatientId || row.Id,
+    DialysisType: shiftData.DialysisType,
+    TreatmentRegion: tempshiftShow.value ? row.TreatmentRegion : row.PatientTreatmentRegion,
+  };
+  const res = await requestClient.post('SchedulingManage/1007', params);
+  if (res) {
+    bedNoArr.value = res as BedOption[];
+  }
+}
+
+/** 获取透析器和灌流器 */
+async function getTxqGlq(row: SignInPatient, record?: number) {
+  const params = {
+    DictionaryId: row.DialysisTypeId,
+    PatientId: row.PatientId,
+  };
+  const res = await requestClient.get('DialysisModeSet/4001', { params });
+  if (res) {
+    const data = res as any[];
+    DialyzerArr.value = data[0]?.Dialyzer || [];
+    DialysisPerfusionArr.value = data[0]?.Hemoperfusion || [];
+    if (record === 1) {
+      const defaultDialyzer = DialyzerArr.value.find((item) => item.IsSelect);
+      const defaultPerfusion = DialysisPerfusionArr.value.find((item) => item.IsSelect);
+      shiftData.Dialyzer = defaultDialyzer?.Name || '';
+      shiftData.DialysisPerfusion = defaultPerfusion?.Value || '';
+    } else {
+      shiftData.Dialyzer = rowValue.value?.ActualDialyzer || '';
+      shiftData.DialysisPerfusion = rowValue.value?.ActualDialysisPerfusion || '';
+    }
+  }
+}
+
+/** 保存排班 */
+async function saveShift() {
+  if (tempshiftShow.value) {
+    await addPb();
+    return;
+  }
+  const params = {
+    Id: rowValue.value?.Id,
+    PatientId: rowValue.value?.PatientId,
+    Date: rowValue.value?.Date?.substring(0, 10),
+    Shift: shiftData.Shift,
+    DialysisType: shiftData.DialysisType,
+    EquipmentId: shiftData.EquipmentId || '',
+    SickbedNo: shiftData.SickbedNo,
+    Dialyzer: shiftData.Dialyzer,
+    DialysisPerfusion: shiftData.DialysisPerfusion,
+  };
+  await requestClient.put('SchedulingManage/3012', params);
+  ElMessage.success('保存成功');
+  shiftShow.value = false;
+  queryList();
+}
+
+/** 添加临时排班 */
+async function addPb() {
+  const params = {
+    ...shiftData,
+    PatientId: selectedPatientId.value,
+    Date: formatDate(new Date(shiftData.Date)),
+  };
+  await requestClient.post('SchedulingManage/1004', params);
+  ElMessage.success('添加成功');
+  shiftShow.value = false;
+  tempshiftShow.value = false;
+  queryList();
+}
+
+/** 保存分区修改 */
+async function saveRegion() {
+  if (!TreatmentRegionId.value) {
+    ElMessage.warning('请选择分区后再保存！');
+    return;
+  }
+  const TreatmentRegion = FqData.value.find((item) => item.Id === TreatmentRegionId.value)?.Name;
+  const params = {
+    Id: RegionVal.value?.Id,
+    TreatmentRegion,
+    TreatmentRegionId: TreatmentRegionId.value,
+  };
+  await requestClient.put('SchedulingManage/3015', params);
+  ElMessage.success('分区修改成功');
+  RegionShow.value = false;
+  queryList();
+}
+
+/** 呼叫患者 */
+async function call(Id: string) {
+  await requestClient.put('SchedulingManage/3009', { Id });
+  ElMessage.success('呼叫成功');
+}
+
+/** 更新透后体重 */
+async function updatePostWeight(item: SignInPatient) {
+  const params = {
+    Id: item.PostPreTreatMessageId,
+    PatientId: item.PatientId,
+    PostWeight: item.PostWeight,
+    DialysisId: item.DialysisId,
+    UpdateOnly: 1,
+  };
+  await requestClient.post('DialysisRecordManage/1005', params);
+  ElMessage.success('更新成功');
+  queryList();
+}
+
+/** 获取传染病临期列表 */
+async function getCheckInfectionList() {
+  checkInfectionList.value = [];
+  if (!selectDay.value) return;
+  const params = { CurrDateTime: formatDate(selectDay.value) };
+  const res = await requestClient.get('DialysisRecordManage/4023', { params });
+  if (res) {
+    checkInfectionList.value = res as InfectionDetail[];
+  }
+}
+
+/** 获取传染病详情 */
+async function clickPatientCheckInfection(patient: SignInPatient) {
+  const params = { PatientId: patient.PatientId };
+  const res = await requestClient.get('DialysisRecordManage/4020', { params });
+  if (res) {
+    infectionDetail.value = res as InfectionDetail;
+    infectionPatientName.value = patient.PatientName;
+    showInfectionDetails.value = true;
+  }
+}
+
+/** 打开确认方案弹窗 */
+function Qrshow(
+  id: string,
+  CurrentState: number,
+  PatientId: string,
+  Date: string,
+  PatientName: string,
+  DialysisId: string,
+  SignId: string
+) {
+  // 这里应该打开确认方案弹窗，简化处理
+  ElMessage.info('打开确认方案弹窗');
+}
+
+/** 开医嘱 */
+function openOrder(PatientId: string, DialysisId: string, Id: string, PatientName: string) {
+  // 这里应该打开开医嘱弹窗，简化处理
+  ElMessage.info('打开开医嘱弹窗');
 }
 
 // ==================== 工具函数 ====================
@@ -510,1028 +827,464 @@ function formatDate(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-function formatDateTime(date: Date): string {
-  const y = date.getFullYear();
-  const mo = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  const h = String(date.getHours()).padStart(2, '0');
-  const mi = String(date.getMinutes()).padStart(2, '0');
-  const s = String(date.getSeconds()).padStart(2, '0');
-  return `${y}-${mo}-${d} ${h}:${mi}:${s}`;
+function getStatusTag(state: number) {
+  return STATUS_TAG_MAP[state] || { label: '未知', type: 'info' as const };
 }
 
-function getShiftByHour(): string {
-  const hour = new Date().getHours();
-  if (hour < 12) return '上午';
-  if (hour < 18) return '下午';
-  return '晚上';
-}
-
-function getStatusTag(status: SignStatus) {
-  return STATUS_TAG_MAP[status] || { label: '未知', type: 'info' as const };
-}
-
-// ==================== 计算属性 ====================
-
-/** 筛选后的患者列表 */
-const filteredPatients = computed(() => {
-  let data = patientList.value;
-  if (filterArea.value) {
-    data = data.filter((p) => p.treatmentArea === filterArea.value);
+function getXyText(row: SignInPatient): string {
+  let xy = '';
+  if (row.PostSystolicPressure) {
+    xy = `${row.PostSystolicPressure} / ${row.PostDiastolicPressure}(mmHg)`;
+  } else if (row.ObserveSystolicPressure) {
+    xy = `${row.ObserveSystolicPressure} / ${row.ObserveDiastolicPressure}(mmHg)`;
+  } else if (row.PreSystolicPressure) {
+    xy = `${row.PreSystolicPressure} / ${row.PreDiastolicPressure}(mmHg)`;
   }
-  if (searchKeyword.value) {
-    const kw = searchKeyword.value.toLowerCase();
-    data = data.filter(
-      (p) =>
-        p.patientName.toLowerCase().includes(kw) ||
-        p.patientNo.toLowerCase().includes(kw) ||
-        p.bedNo.toLowerCase().includes(kw) ||
-        p.treatmentMode.toLowerCase().includes(kw),
-    );
+  return xy;
+}
+
+function getMText(row: SignInPatient): string {
+  if (row.NoWeightBasis && sessionStorage.getItem('IsShowNoWeightBasis') === '1') {
+    return row.NoWeightBasis;
   }
-  return data;
-});
-
-/** 当前选中患者是否已签到 */
-const isSelectedSignedIn = computed(() => {
-  return selectedPatient.value && selectedPatient.value.state >= SignStatus.SignedIn;
-});
-
-/** 当前选中患者是否待签到 */
-const isSelectedPending = computed(() => {
-  return selectedPatient.value && selectedPatient.value.state < SignStatus.SignedIn;
-});
-
-/** 统计数据 */
-const stats = computed(() => {
-  const total = patientList.value.length;
-  const signed = patientList.value.filter((p) => p.state >= SignStatus.SignedIn).length;
-  const pending = patientList.value.filter((p) => p.state < SignStatus.SignedIn).length;
-  const dialyzing = patientList.value.filter((p) => p.state === SignStatus.Dialyzing).length;
-  const completed = patientList.value.filter((p) => p.state === SignStatus.Completed).length;
-  return { total, signed, pending, dialyzing, completed };
-});
-
-// ==================== 业务逻辑 ====================
-
-/** 更新当前时间 */
-function updateDateTime() {
-  currentDateTime.value = formatDateTime(new Date());
+  return `${row.CurrentBeforeDialysisWeight === 0 ? '/ ' : row.CurrentBeforeDialysisWeight}(Kg)`;
 }
 
-/** 加载患者列表 */
-function loadPatients() {
-  loading.value = true;
-  setTimeout(() => {
-    patientList.value = generateMockPatients();
-    loading.value = false;
-  }, 300);
+function getPressureText(systolic?: number, diastolic?: number): string {
+  return systolic && diastolic ? `${systolic} / ${diastolic}(mmHg)` : '';
 }
 
-/** 选中患者 */
-function handleSelectPatient(patient: SignedPatient) {
-  selectedPatientId.value = patient.patientId;
-  selectedPatient.value = patient;
+function showInfection(patient: SignInPatient): boolean {
+  const detail = checkInfectionList.value.find((item) => item.PatientId === patient.PatientId);
+  return !!(detail && detail.RemindType);
+}
 
-  if (patient.state >= SignStatus.SignedIn) {
-    // 已签到，加载患者详情
-    patientInfo.value = generateMockPatientInfo(patient.patientId);
-    prescriptionInfo.value = generateMockPrescription(patient.patientId);
+function infectionDetailColor(patient: SignInPatient): string {
+  const detail = checkInfectionList.value.find((item) => item.PatientId === patient.PatientId);
+  if (detail) {
+    return detail.RemindType === 2 ? 'error' : detail.RemindType === 1 ? 'warning' : 'transparent';
+  }
+  return '';
+}
+
+function calcProgress(startTime: string, endTime: string | null, expectedEndTime: string): number {
+  const start = new Date(startTime).getTime();
+  const expectedEnd = new Date(expectedEndTime).getTime();
+  const end = endTime ? new Date(endTime).getTime() : 0;
+  const now = Date.now();
+  const expectedDuration = expectedEnd - start;
+
+  if (now <= start) return 0;
+  if (end && expectedEnd) {
+    if (end < expectedEnd) {
+      const actualDuration = end - start;
+      return Math.floor((actualDuration / expectedDuration) * 100);
+    } else {
+      return 100;
+    }
+  }
+  if (!end && expectedEnd) {
+    const elapsedTime = now - start;
+    return Math.min(Math.floor((elapsedTime / expectedDuration) * 100), 100);
+  }
+  return 0;
+}
+
+function getExpectedEndTime(row: SignInPatient): string {
+  if (row.LoginTime) {
+    const start = new Date(row.LoginTime).getTime();
+    const duration = (row.TreatHour || 0) * 60 * 60 * 1000 + (row.TreatMin || 0) * 60 * 1000;
+    return new Date(start + duration).toISOString().substring(0, 16);
+  }
+  return '';
+}
+
+function getProgressColor(endTime: string | null, expectedEndTime: string): string {
+  const now = new Date();
+  if (endTime) {
+    const diff = Math.abs(new Date(endTime).getTime() - new Date(expectedEndTime).getTime()) / (1000 * 60);
+    if (diff >= 30) return 'red';
+    if (diff >= 15) return 'orange';
+    if (diff > 5) return 'blue';
+    return 'green';
   } else {
-    patientInfo.value = null;
-    prescriptionInfo.value = null;
+    const diff = (now.getTime() - new Date(expectedEndTime).getTime()) / (1000 * 60);
+    return diff >= 30 ? 'red' : 'green';
   }
+}
+
+// ==================== 事件处理 ====================
+
+function handleSelectPatient(row: SignInPatient) {
+  selectedPatientId.value = row.PatientId;
+  selectedPatient.value = row;
 
   // 重置签到表单
   Object.assign(signInForm, {
-    preWeight: undefined,
-    systolicBP: undefined,
-    diastolicBP: undefined,
-    heartRate: undefined,
-    temperature: undefined,
-    remark: '',
+    CurrentBeforeDialysisWeight: undefined,
+    PreSystolicPressure: undefined,
+    PreDiastolicPressure: undefined,
+    HeartRate: undefined,
+    Temperature: undefined,
+    Remark: '',
   });
 }
 
-/** 确认签到 */
-async function handleSignIn() {
-  if (!signInFormRef.value || !selectedPatientId.value) return;
-  await signInFormRef.value.validate(async (valid) => {
-    if (!valid) return;
-    try {
-      // await confirmSignIn(signInForm);
-      ElMessage.success(`患者"${selectedPatient.value?.patientName}"签到成功`);
-      // 更新本地状态
-      if (selectedPatient.value) {
-        selectedPatient.value.state = SignStatus.SignedIn;
-        selectedPatient.value.signInTime = formatDateTime(new Date());
-        const idx = patientList.value.findIndex((p) => p.patientId === selectedPatientId.value);
-        if (idx !== -1) {
-          patientList.value[idx]!.state = SignStatus.SignedIn;
-          patientList.value[idx]!.signInTime = formatDateTime(new Date());
-        }
-        // 加载详情
-        patientInfo.value = generateMockPatientInfo(selectedPatient.value.patientId);
-        prescriptionInfo.value = generateMockPrescription(selectedPatient.value.patientId);
-      }
-    } catch {
-      ElMessage.error('签到失败，请重试');
-    }
-  });
+function changeShift(row: SignInPatient) {
+  rowValue.value = JSON.parse(JSON.stringify(row));
+  shiftData.DialysisType = row.ActualDialysisType;
+  shiftData.Shift = row.ActualShift;
+  getBedNo(row);
+  getTxqGlq(row);
+  shiftShow.value = true;
+  tempshiftShow.value = false;
 }
 
-/** 切换左栏收缩状态 */
-function toggleLeftPanel() {
-  leftCollapsed.value = !leftCollapsed.value;
-  localStorage.setItem('signIn_leftCollapsed', String(leftCollapsed.value));
+function changeRegion(row: SignInPatient) {
+  TreatmentRegionId.value = row.TreatmentRegionId;
+  RegionVal.value = row;
+  RegionShow.value = true;
 }
 
-/** 更新透析方案 */
-function handleUpdatePrescription() {
-  ElMessage.info('更新透析方案功能开发中...');
+function changeDryW(row: SignInPatient) {
+  rowVal.value = row;
+  CurrentDryWeight.value = row.CurrentDryWeight;
+  changeShow.value = true;
+  getHis();
 }
 
-/** 开医嘱 */
-function handleOpenDoctorAdvice() {
-  ElMessage.info('开医嘱功能开发中...');
-}
-
-/** 透析记录单 */
-function handleDialysisRecord() {
-  ElMessage.info('透析记录单功能开发中...');
-}
-
-/** 上机 */
-function handleStartMachine() {
-  if (!selectedPatient.value) return;
-  ElMessage.success(`患者"${selectedPatient.value.patientName}"已上机`);
-  selectedPatient.value.state = SignStatus.Dialyzing;
-  const idx = patientList.value.findIndex((p) => p.patientId === selectedPatientId.value);
-  if (idx !== -1) {
-    patientList.value[idx]!.state = SignStatus.Dialyzing;
+function chooseShift(val: string) {
+  shiftData.Shift = val;
+  if (rowValue.value) {
+    getBedNo(rowValue.value);
   }
 }
 
-/** 下机 */
-function handleStopMachine() {
-  if (!selectedPatient.value) return;
-  ElMessage.success(`患者"${selectedPatient.value.patientName}"已下机`);
-  selectedPatient.value.state = SignStatus.OffMachine;
-  const idx = patientList.value.findIndex((p) => p.patientId === selectedPatientId.value);
-  if (idx !== -1) {
-    patientList.value[idx]!.state = SignStatus.OffMachine;
+function chooseDialysisType(val: string) {
+  shiftData.DialysisType = val;
+  if (rowValue.value) {
+    getBedNo(rowValue.value);
+    const typeId = txqDataNew.value.find((item) => item.Value === val)?.Id;
+    getTxqGlq({ ...rowValue.value, DialysisTypeId: typeId } as SignInPatient, 1);
   }
 }
 
-/** 打开干体重调整弹窗 */
-function handleOpenDryWeightDialog() {
-  if (!patientInfo.value) return;
-  dryWeightForm.currentDryWeight = patientInfo.value.dryWeight;
-  dryWeightForm.newDryWeight = undefined;
-  dryWeightForm.reason = '';
-  dryWeightDialogVisible.value = true;
+function chooseBedNo(val: string) {
+  const bed = bedNoArr.value.find((item) => item.EquipmentId === val);
+  shiftData.SickbedNo = bed?.SickbedNo || '';
 }
 
-/** 确认干体重调整 */
-async function handleDryWeightSubmit() {
-  if (!dryWeightFormRef.value) return;
-  await dryWeightFormRef.value.validate(async (valid) => {
-    if (!valid) return;
-    try {
-      ElMessage.success('干体重调整成功');
-      if (patientInfo.value) {
-        patientInfo.value.dryWeight = dryWeightForm.newDryWeight!;
-      }
-      dryWeightDialogVisible.value = false;
-    } catch {
-      ElMessage.error('干体重调整失败');
-    }
-  });
+function showTempclick() {
+  tempshiftShow.value = true;
+  shiftData.Date = formatDate(new Date());
+  shiftData.Shift = '';
+  shiftData.DialysisType = '';
+  shiftData.Dialyzer = '';
+  shiftData.DialysisPerfusion = '';
+  shiftData.SickbedNo = '';
+  shiftData.EquipmentId = '';
+  shiftShow.value = true;
 }
 
-/** 打开传染病检查弹窗 */
-function handleOpenInfectiousDialog() {
-  if (!selectedPatientId.value) return;
-  infectiousRecords.value = generateMockInfectiousRecords(selectedPatientId.value);
-  infectiousDialogVisible.value = true;
+function dayCg() {
+  PatientShiftSet();
+  queryList();
 }
 
-/** 获取传染病结果标签类型 */
-function getInfectiousResultType(result: string): '' | 'success' | 'warning' | 'danger' | 'info' {
-  if (result.includes('阳性') || result.includes('+')) return 'danger';
-  if (result.includes('阴性') || result.includes('-')) return 'success';
-  return 'info';
+function choosePxType() {
+  localStorage.setItem('PxType', PxType.value);
+  queryList();
+}
+
+function choosemyShift() {
+  if (myShift.value) {
+    sessionStorage.setItem('myShift', myShift.value);
+  }
+  queryList();
+}
+
+function autoLaod() {
+  if (loadQ.value) {
+    if (qrT) clearInterval(qrT);
+    loadQ.value = false;
+    autoLaodC.value = 'default';
+  } else {
+    const t = (loadTime.value || 5) * 1000;
+    qrT = setInterval(() => {
+      queryList(false);
+    }, t);
+    loadQ.value = true;
+    autoLaodC.value = 'primary';
+  }
+}
+
+function shiftListType() {
+  listType.value = listType.value === '表格' ? '卡片' : '表格';
+}
+
+function toPrintPrescription() {
+  const shift = myShift.value;
+  const date = formatDate(selectDay.value);
+  const url = window.location.href.split('#')[0];
+  const furl = `${url}#/print/prescription_execution_form_print/${date}/${shift}`;
+  window.open(furl);
+}
+
+function handleTxjld(row: SignInPatient) {
+  // 打开透析记录单
+  ElMessage.info('打开透析记录单');
 }
 
 // ==================== 生命周期 ====================
 
 onMounted(() => {
-  // 恢复左栏收缩状态
-  const saved = localStorage.getItem('signIn_leftCollapsed');
-  if (saved !== null) {
-    leftCollapsed.value = saved === 'true';
+  // 初始化班次
+  const hour = new Date().getHours();
+  if (hour < 12) {
+    myShift.value = sessionStorage.getItem('myShift') || '上午';
+  } else {
+    myShift.value = sessionStorage.getItem('myShift') || '下午';
   }
 
-  // 初始化时间
-  updateDateTime();
-  dateTimeTimer.value = setInterval(updateDateTime, 1000);
+  // 加载排序方式
+  if (localStorage.getItem('PxType')) {
+    PxType.value = localStorage.getItem('PxType') || '1';
+  }
 
-  // 初始化班次
-  currentShift.value = getShiftByHour();
-
-  // 加载数据
-  loadPatients();
+  loadMenu();
+  queryList();
 });
 
 onUnmounted(() => {
-  if (dateTimeTimer.value) {
-    clearInterval(dateTimeTimer.value);
-  }
+  if (qrT) clearInterval(qrT);
 });
 </script>
 
 <template>
   <Page title="患者签到">
     <div class="sign-in-container">
-      <!-- ========== 左栏：已签到患者列表 ========== -->
-      <div
-        class="left-panel"
-        :class="{ 'left-panel--collapsed': leftCollapsed }"
-      >
-        <!-- 收缩/展开按钮 -->
-        <div class="collapse-btn" @click="toggleLeftPanel">
-          <svg
-            viewBox="0 0 1024 1024"
-            width="16"
-            height="16"
-            xmlns="http://www.w3.org/2000/svg"
-            :style="{ transform: leftCollapsed ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.3s' }"
-          >
-            <path
-              fill="currentColor"
-              d="M348.2 761.6L607.4 512 348.2 262.4c-12.8-12.8-12.8-33.8 0-46.6 12.8-12.8 33.8-12.8 46.6 0l284.8 275.2c12.8 12.8 12.8 33.8 0 46.6L394.8 812.8c-12.8 12.8-33.8 12.8-46.6 0-12.8-12.8-12.8-33.8 0-46.6z"
-            />
-          </svg>
+      <!-- 筛选栏 -->
+      <div class="filter-bar">
+        <ElInput
+          v-model="patNameSearchVal"
+          :placeholder="'患者姓名筛选'"
+          clearable
+          style="width: 110px"
+          class="m-r-10"
+        />
+        <ElDatePicker
+          v-model="selectDay"
+          type="date"
+          :placeholder="'请选择'"
+          style="width: 115px"
+          class="m-r-10"
+          @change="dayCg"
+        />
+        <ElSelect v-model="PxType" :placeholder="'请选择排序方式'" @change="choosePxType" class="w-100 m-r-10">
+          <ElOption v-for="item in SORT_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+        </ElSelect>
+        <ElSelect v-model="myShift" @change="choosemyShift" class="w-80 m-r-10">
+          <ElOption value="全部" label="全部" />
+          <ElOption v-for="(option, index) in bcData" :key="index" :value="option.ShiftName" :label="option.ShiftName" />
+        </ElSelect>
+        <ElSelect v-model="myFq" @change="queryList" class="w-80 m-r-10">
+          <ElOption value="全部" label="全部" />
+          <ElOption v-for="(item, index) in FqData" :key="item.Id" :value="item.Name" :label="item.Name" />
+        </ElSelect>
+        <ElSelect v-model="TreatmentRegionDetail" @change="queryList" class="w-120 m-r-10" style="width: 120px">
+          <ElOption value="全部" label="全部子分区" />
+          <ElOption v-for="(item, index) in FqChildData" :key="item.Id" :value="item.Id" :label="item.Name" />
+        </ElSelect>
+        <ElSelect v-model="signStatus" class="w-80 m-r-10">
+          <ElOption v-for="item in SIGN_STATUS_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+        </ElSelect>
+        <ElSelect v-model="PatientType" class="w-80 m-r-10" @change="queryList">
+          <ElOption value="全部" label="全部" />
+          <ElOption v-for="(item, index) in PatientTypeList" :key="item.Id" :value="item.Id" :label="item.Name" />
+        </ElSelect>
+        <ElButton type="info" class="m-r-10" @click="queryList" :loading="loading">查询</ElButton>
+        <ElButton type="success" class="m-r-10" @click="querySign" :loading="loading2">生成</ElButton>
+        <ElButton type="primary" class="m-r-10" @click="showTempclick">临时签到</ElButton>
+        <ElButton class="m-r-10" @click="toPrintPrescription">打印处方执行单</ElButton>
+        <ElButton type="danger" class="m-r-10" @click="DeleteAll">删除</ElButton>
+        <div style="display: inline-block">
+          <ElInputNumber class="m-r-10" :min="1" style="width: 50px; margin-right: 0" v-model="loadTime" />
+          <ElButton :type="autoLaodC" @click="autoLaod">定时刷新</ElButton>
         </div>
-
-        <!-- 搜索框 -->
-        <div v-show="!leftCollapsed" class="left-search">
-          <ElInput
-            v-model="searchKeyword"
-            placeholder="搜索患者姓名/编号"
-            clearable
-            size="small"
-          />
-        </div>
-
-        <!-- 统计 -->
-        <div v-show="!leftCollapsed" class="patient-stats-bar">
-          <span>共 <b>{{ stats.total }}</b> 人</span>
-          <span class="stat-signed">已签 <b>{{ stats.signed }}</b></span>
-          <span class="stat-pending">待签 <b>{{ stats.pending }}</b></span>
-        </div>
-
-        <!-- 患者列表 -->
-        <div v-show="!leftCollapsed" v-loading="loading" class="patient-list">
-          <div
-            v-for="patient in filteredPatients"
-            :key="patient.patientId"
-            class="patient-item"
-            :class="{ 'patient-item--active': selectedPatientId === patient.patientId }"
-            @click="handleSelectPatient(patient)"
-          >
-            <div class="patient-item__header">
-              <span class="patient-item__name">{{ patient.patientName }}</span>
-              <span
-                v-if="patient.bloodInfectious"
-                class="infectious-dot"
-                :title="patient.bloodInfectious"
-              />
-              <ElTag
-                :type="getStatusTag(patient.state).type"
-                size="small"
-                effect="light"
-                class="status-tag"
-              >
-                {{ getStatusTag(patient.state).label }}
-              </ElTag>
-            </div>
-            <div class="patient-item__info">
-              <span class="bed-info">{{ patient.bedNo }}</span>
-              <span class="mode-info">{{ patient.treatmentMode }}</span>
-            </div>
-          </div>
-          <div v-if="filteredPatients.length === 0 && !loading" class="no-data">
-            暂无患者数据
-          </div>
-        </div>
+        <h5 style="display: inline-block; vertical-align: middle; margin-left: 10px">
+          统计：<span style="color: green">{{ stats.signed }}</span> /
+          <span style="color: blue">{{ stats.total }}</span>
+        </h5>
+        <div class="list-type-tag" @click="shiftListType">{{ listType === '表格' ? '卡片' : '表格' }}</div>
       </div>
 
-      <!-- ========== 中栏：签到操作区域 ========== -->
-      <div class="center-panel">
-        <!-- 顶部信息栏 -->
-        <div class="top-bar">
-          <div class="top-bar__left">
-            <span class="current-datetime">{{ currentDateTime }}</span>
-            <ElDivider direction="vertical" />
-            <span class="current-shift">班次：</span>
-            <ElSelect v-model="currentShift" size="small" style="width: 90px" @change="loadPatients">
-              <ElOption
-                v-for="item in SHIFT_OPTIONS"
-                :key="item.value"
-                :label="item.label"
-                :value="item.value"
-              />
-            </ElSelect>
-            <ElDivider direction="vertical" />
-            <span class="filter-label">分区：</span>
-            <ElSelect
-              v-model="filterArea"
-              placeholder="全部"
-              clearable
-              size="small"
-              style="width: 100px"
-              @change="loadPatients"
-            >
-              <ElOption
-                v-for="item in AREA_OPTIONS"
-                :key="item.value"
-                :label="item.label"
-                :value="item.value"
-              />
-            </ElSelect>
-          </div>
-          <div class="top-bar__right">
-            <ElTag type="info" effect="plain" size="small">
-              透析中 {{ stats.dialyzing }} 人
-            </ElTag>
-            <ElTag type="success" effect="plain" size="small">
-              已完成 {{ stats.completed }} 人
-            </ElTag>
-          </div>
-        </div>
-
-        <!-- 主体内容 -->
-        <div class="main-content">
-          <!-- 未选择患者 -->
-          <div v-if="!selectedPatient" class="empty-state">
-            <ElEmpty description="请从左侧选择患者" />
-          </div>
-
-          <!-- 选中患者但未签到 -->
-          <div v-else-if="isSelectedPending" class="sign-in-section">
-            <div class="sign-in-prompt">
-              <ElTag type="warning" size="large" effect="light">
-                该患者还未确认签到
-              </ElTag>
-            </div>
-
-            <ElCard shadow="hover" class="sign-in-card">
-              <template #header>
-                <div class="card-header">
-                  <span class="card-header__title">签到信息</span>
-                  <span class="card-header__patient">
-                    {{ selectedPatient.patientName }} / {{ selectedPatient.bedNo }}
+      <!-- 数据表格 -->
+      <div v-if="listType === '表格'" v-loading="loading" class="table-container">
+        <ElTable :data="filterTabData" style="width: 100%" height="calc(100vh - 280px)" border>
+          <ElTableColumn prop="PatientName" label="姓名" width="120" fixed="left">
+            <template #default="{ row }">
+              <div style="display: flex; align-items: center; flex-direction: column">
+                <div style="display: flex; justify-content: center; align-items: center">
+                  <span
+                    @click="handleTxjld(row)"
+                    :style="{
+                      background: row.DefineColor ? row.DefineColor : '',
+                      padding: row.IsFocus || row.DefineColor ? '0 4px' : 0,
+                      cursor: 'pointer',
+                    }"
+                  >
+                    {{ row.PatientName }}
                   </span>
+                  <ElTag
+                    v-if="showInfection(row)"
+                    style="cursor: pointer; margin-left: 4px"
+                    :type="infectionDetailColor(row)"
+                    size="small"
+                    @click="clickPatientCheckInfection(row)"
+                  >
+                    传
+                  </ElTag>
                 </div>
-              </template>
-              <ElForm
-                ref="signInFormRef"
-                :model="signInForm"
-                :rules="signInFormRules"
-                label-width="120px"
-                label-position="right"
-                size="default"
-              >
-                <ElFormItem label="透析前体重" prop="preWeight">
-                  <ElInputNumber
-                    v-model="signInForm.preWeight"
-                    :min="20"
-                    :max="200"
-                    :precision="1"
-                    :step="0.5"
-                    placeholder="请输入透析前体重"
-                    style="width: 220px"
-                  />
-                  <span class="form-unit">kg</span>
-                </ElFormItem>
-                <ElFormItem label="收缩压" prop="systolicBP">
-                  <ElInputNumber
-                    v-model="signInForm.systolicBP"
-                    :min="60"
-                    :max="260"
-                    :step="1"
-                    placeholder="收缩压"
-                    style="width: 220px"
-                  />
-                  <span class="form-unit">mmHg</span>
-                </ElFormItem>
-                <ElFormItem label="舒张压" prop="diastolicBP">
-                  <ElInputNumber
-                    v-model="signInForm.diastolicBP"
-                    :min="30"
-                    :max="160"
-                    :step="1"
-                    placeholder="舒张压"
-                    style="width: 220px"
-                  />
-                  <span class="form-unit">mmHg</span>
-                </ElFormItem>
-                <ElFormItem label="心率" prop="heartRate">
-                  <ElInputNumber
-                    v-model="signInForm.heartRate"
-                    :min="30"
-                    :max="200"
-                    :step="1"
-                    placeholder="心率"
-                    style="width: 220px"
-                  />
-                  <span class="form-unit">次/分</span>
-                </ElFormItem>
-                <ElFormItem label="体温" prop="temperature">
-                  <ElInputNumber
-                    v-model="signInForm.temperature"
-                    :min="34"
-                    :max="42"
-                    :precision="1"
-                    :step="0.1"
-                    placeholder="体温"
-                    style="width: 220px"
-                  />
-                  <span class="form-unit">&deg;C</span>
-                </ElFormItem>
-                <ElFormItem label="透析前评估" prop="remark">
-                  <ElInput
-                    v-model="signInForm.remark"
-                    type="textarea"
-                    :rows="3"
-                    placeholder="请输入透析前评估备注（选填）"
-                    maxlength="500"
-                    show-word-limit
-                  />
-                </ElFormItem>
-                <ElFormItem>
-                  <ElButton type="primary" size="large" @click="handleSignIn">
-                    确认签到
-                  </ElButton>
-                </ElFormItem>
-              </ElForm>
-            </ElCard>
-          </div>
-
-          <!-- 已签到 -->
-          <div v-else-if="isSelectedSignedIn" class="patient-detail-section">
-            <!-- 患者基本信息卡片 -->
-            <ElCard shadow="hover" class="detail-card">
-              <template #header>
-                <div class="card-header">
-                  <span class="card-header__title">患者基本信息</span>
-                  <div class="card-header__actions">
-                    <ElTooltip content="干体重调整" placement="top">
-                      <ElButton type="warning" link size="small" @click="handleOpenDryWeightDialog">
-                        干体重调整
-                      </ElButton>
-                    </ElTooltip>
-                    <ElTooltip content="传染病检查" placement="top">
-                      <ElButton type="danger" link size="small" @click="handleOpenInfectiousDialog">
-                        传染病检查
-                      </ElButton>
-                    </ElTooltip>
+                <ElButton v-if="pbshow" type="primary" size="small" style="margin-top: 4px" @click="call(row.Id)">
+                  呼叫
+                </ElButton>
+              </div>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn prop="SickbedNo" label="床号" width="80">
+            <template #default="{ row }">
+              <span style="color: #ff0000; font-weight: 600">{{ row.SickbedNo }}</span>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn prop="EquipmentSerialNumber" label="机器编号" width="100" />
+          <ElTableColumn prop="TreatmentRegion" label="分区" width="80">
+            <template #default="{ row }">
+              <span style="cursor: pointer; color: #515a6e" @click="changeRegion(row)">{{ row.TreatmentRegion }}</span>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn prop="ActualShift" label="班次" width="80">
+            <template #default="{ row }">
+              <span style="cursor: pointer; color: #515a6e" @click="changeShift(row)">{{ row.ActualShift }}</span>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn prop="ActualDialysisType" label="治疗模式" width="100">
+            <template #default="{ row }">
+              <span style="cursor: pointer" @click="changeShift(row)">{{ row.ActualDialysisType }}</span>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn prop="ActualDialyzer" label="透析器" width="100">
+            <template #default="{ row }">
+              <span style="cursor: pointer" @click="changeShift(row)">{{ row.ActualDialyzer }}</span>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn prop="ActualDialysisPerfusion" label="灌流器" width="100">
+            <template #default="{ row }">
+              <span v-if="row.ActualDialysisPerfusion !== '不使用'" style="cursor: pointer" @click="changeShift(row)">
+                {{ row.ActualDialysisPerfusion }}
+              </span>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn prop="formatAnticoagulants" label="抗凝剂" width="120">
+            <template #default="{ row }">
+              <div v-for="item in row.formatAnticoagulants" :key="item">{{ item }}</div>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn prop="CurrentDryWeight" label="干体重" width="80">
+            <template #default="{ row }">
+              <span style="cursor: pointer; color: #e6a23c; font-weight: 600" @click="changeDryW(row)">
+                {{ row.CurrentDryWeight }}
+              </span>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn label="本次透前称重&最新血压" min-width="180">
+            <template #default="{ row }">
+              <div v-if="pbshow && row.CurrentState >= 3" style="min-width: 156px">
+                <div v-if="row.CurrentState < 4" style="display: flex; align-items: center; gap: 8px">
+                  <ElInput v-model="row.CurrentBeforeDialysisWeight" style="width: 80px" />
+                  <ElButton type="success" size="small" @click="SignClick(row)">签到</ElButton>
+                  <span style="font-size: 11px">{{ getXyText(row) }}</span>
+                </div>
+                <div v-else-if="row.CurrentState === 2">
+                  <div v-if="row.NoWeightBasis">
+                    <ElInput v-model="row.NoWeightBasis" type="textarea" readonly style="width: 120px" />
+                    <p style="font-size: 11px">{{ getXyText(row) }}</p>
+                  </div>
+                  <div v-else-if="row.CurrentBeforeDialysisWeight">
+                    <ElInput v-model="row.CurrentBeforeDialysisWeight" readonly style="width: 80px" />
+                    <p style="font-size: 11px">{{ getXyText(row) }}</p>
                   </div>
                 </div>
-              </template>
-              <template v-if="patientInfo">
-                <ElDescriptions :column="3" border size="small">
-                  <ElDescriptionsItem label="姓名">{{ patientInfo.patientName }}</ElDescriptionsItem>
-                  <ElDescriptionsItem label="性别">{{ patientInfo.gender }}</ElDescriptionsItem>
-                  <ElDescriptionsItem label="年龄">{{ patientInfo.age }}岁</ElDescriptionsItem>
-                  <ElDescriptionsItem label="患者编号">{{ patientInfo.patientNo }}</ElDescriptionsItem>
-                  <ElDescriptionsItem label="治疗区域">{{ patientInfo.treatmentArea }}</ElDescriptionsItem>
-                  <ElDescriptionsItem label="床号">{{ patientInfo.bedNo }}</ElDescriptionsItem>
-                  <ElDescriptionsItem label="治疗模式">
-                    <ElTag size="small" type="primary">{{ patientInfo.treatmentMode }}</ElTag>
-                  </ElDescriptionsItem>
-                  <ElDescriptionsItem label="透析器">{{ patientInfo.dialyzer }}</ElDescriptionsItem>
-                  <ElDescriptionsItem label="干体重">
-                    <span class="dry-weight-value">{{ patientInfo.dryWeight }} kg</span>
-                  </ElDescriptionsItem>
-                  <ElDescriptionsItem label="抗凝剂">{{ patientInfo.anticoagulant }}</ElDescriptionsItem>
-                  <ElDescriptionsItem label="抗凝剂首剂">{{ patientInfo.anticoagulantFirstDose }}</ElDescriptionsItem>
-                  <ElDescriptionsItem label="抗凝剂追加">{{ patientInfo.anticoagulantAdditionalDose }}</ElDescriptionsItem>
-                  <ElDescriptionsItem label="血管通路">{{ patientInfo.vascularAccess }}</ElDescriptionsItem>
-                  <ElDescriptionsItem label="过敏记录" :span="2">
-                    <span :class="{ 'allergy-warning': patientInfo.allergyRecord && patientInfo.allergyRecord !== '无' }">
-                      {{ patientInfo.allergyRecord || '无' }}
-                    </span>
-                  </ElDescriptionsItem>
-                  <ElDescriptionsItem label="主要诊断" :span="3">
-                    {{ patientInfo.mainDiagnosis }}
-                  </ElDescriptionsItem>
-                </ElDescriptions>
-              </template>
-            </ElCard>
-
-            <!-- 透析处方信息卡片 -->
-            <ElCard shadow="hover" class="detail-card">
-              <template #header>
-                <div class="card-header">
-                  <span class="card-header__title">透析处方</span>
+                <div v-else>
+                  <ElTag type="success" size="small">已签到</ElTag>
+                  <span style="margin-left: 8px">{{ getMText(row) }}</span>
+                  <span style="margin-left: 8px; font-size: 11px">{{ getXyText(row) }}</span>
                 </div>
-              </template>
-              <template v-if="prescriptionInfo">
-                <ElDescriptions :column="3" border size="small">
-                  <ElDescriptionsItem label="治疗时间">{{ prescriptionInfo.treatmentTime }}</ElDescriptionsItem>
-                  <ElDescriptionsItem label="血流量">{{ prescriptionInfo.bloodFlowRate }}</ElDescriptionsItem>
-                  <ElDescriptionsItem label="透析液流量">{{ prescriptionInfo.dialysateFlowRate }}</ElDescriptionsItem>
-                  <ElDescriptionsItem label="超滤量">{{ prescriptionInfo.ultrafiltrationVolume }}</ElDescriptionsItem>
-                  <ElDescriptionsItem label="目标脱水量">{{ prescriptionInfo.targetWeightLoss }}</ElDescriptionsItem>
-                  <ElDescriptionsItem label="透析液温度">{{ prescriptionInfo.dialysateTemperature }}</ElDescriptionsItem>
-                  <ElDescriptionsItem label="抗凝剂首剂">{{ prescriptionInfo.anticoagulantFirstDose }}</ElDescriptionsItem>
-                  <ElDescriptionsItem label="抗凝剂追加">{{ prescriptionInfo.anticoagulantAdditionalDose }}</ElDescriptionsItem>
-                </ElDescriptions>
-              </template>
-            </ElCard>
+              </div>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn label="透后体重&血压" min-width="180">
+            <template #default="{ row }">
+              <div v-if="row.PostPreTreatMessageId" style="display: flex; align-items: center; gap: 8px">
+                <ElInput v-model="row.displayPostWeight" style="width: 80px" />
+                <ElButton type="primary" size="small" @click="updatePostWeight(row)">更新</ElButton>
+                <span style="font-size: 11px">
+                  {{ getPressureText(row.PostSystolicPressure, row.PostDiastolicPressure) }}
+                </span>
+              </div>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn prop="UltraFilRate" label="超滤量" width="100">
+            <template #default="{ row }">
+              {{ row.UltraFilRate ? row.UltraFilRate + 'ml' : '' }}
+            </template>
+          </ElTableColumn>
+          <ElTableColumn prop="SchedulingUserName" label="排班" width="80" />
+          <ElTableColumn prop="SchedulingBedUserName" label="排床" width="80" />
+          <ElTableColumn label="操作" width="140" fixed="right">
+            <template #default="{ row }">
+              <div v-if="pbshow">
+                <template v-if="row.CurrentState === 2">
+                  <ElButton type="danger" size="small" @click="deleteQd(row.Id)">删除</ElButton>
+                </template>
+                <template v-else-if="row.CurrentState >= 4">
+                  <ElButton
+                    type="success"
+                    size="small"
+                    @click="
+                      Qrshow(
+                        row.Id,
+                        row.CurrentState,
+                        row.PatientId,
+                        row.Date,
+                        row.PatientName,
+                        row.DialysisId,
+                        row.SignId
+                      )
+                    "
+                  >
+                    确认
+                  </ElButton>
+                  <ElButton type="primary" size="small" @click="openOrder(row.PatientId, row.DialysisId, row.Id, row.PatientName)">
+                    开医嘱
+                  </ElButton>
+                </template>
+              </div>
+              <ElTag v-else type="danger" size="small">已过期</ElTag>
+            </template>
+          </ElTableColumn>
+        </ElTable>
+      </div>
 
-            <!-- 操作按钮区 -->
-            <div class="action-buttons">
-              <ElButton type="primary" plain @click="handleUpdatePrescription">
-                更新透析方案
-              </ElButton>
-              <ElButton type="success" plain @click="handleOpenDoctorAdvice">
-                开医嘱
-              </ElButton>
-              <ElButton type="info" plain @click="handleDialysisRecord">
-                透析记录单
-              </ElButton>
-              <ElDivider direction="vertical" />
-              <ElButton
-                v-if="selectedPatient?.state === SignStatus.SignedIn"
-                type="primary"
-                @click="handleStartMachine"
-              >
-                上机
-              </ElButton>
-              <ElButton
-                v-if="selectedPatient?.state === SignStatus.Dialyzing"
-                type="warning"
-                @click="handleStopMachine"
-              >
-                下机
-              </ElButton>
-              <ElTag
-                v-if="selectedPatient?.state === SignStatus.OffMachine || selectedPatient?.state === SignStatus.Completed"
-                type="success"
-                effect="dark"
-                size="large"
-              >
-                {{ getStatusTag(selectedPatient.state).label }}
-              </ElTag>
+      <!-- 卡片视图 -->
+      <div v-else v-loading="loading" class="card-container">
+        <div v-for="row in filterTabData" :key="row.Id" class="patient-card">
+          <div class="card-header">
+            <div class="patient-info">
+              <span class="patient-name" @click="handleTxjld(row)">{{ row.PatientName }}</span>
+              <ElTag v-if="showInfection(row)" :type="infectionDetailColor(row)" size="small" @click="clickPatientCheckInfection(row)">传</ElTag>
+              <span class="patient-gender">{{ row.Sex }} / {{ row.Age }}岁</span>
             </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ========== 干体重调整弹窗 ========== -->
-    <ElDialog
-      v-model="dryWeightDialogVisible"
-      title="干体重调整"
-      width="480px"
-      destroy-on-close
-    >
-      <ElForm
-        ref="dryWeightFormRef"
-        :model="dryWeightForm"
-        :rules="{
-          newDryWeight: [
-            { required: true, message: '请输入新干体重', trigger: 'blur' },
-            { type: 'number', min: 30, max: 150, message: '干体重范围 30-150kg', trigger: 'blur' },
-          ],
-          reason: [{ required: true, message: '请输入调整原因', trigger: 'blur' }],
-        }"
-        label-width="100px"
-      >
-        <ElFormItem label="当前干体重">
-          <span class="dry-weight-display">{{ dryWeightForm.currentDryWeight }} kg</span>
-        </ElFormItem>
-        <ElFormItem label="新干体重" prop="newDryWeight">
-          <ElInputNumber
-            v-model="dryWeightForm.newDryWeight"
-            :min="30"
-            :max="150"
-            :precision="1"
-            :step="0.5"
-            placeholder="请输入新干体重"
-            style="width: 100%"
-          />
-        </ElFormItem>
-        <ElFormItem label="调整原因" prop="reason">
-          <ElInput
-            v-model="dryWeightForm.reason"
-            type="textarea"
-            :rows="3"
-            placeholder="请输入干体重调整原因"
-            maxlength="200"
-            show-word-limit
-          />
-        </ElFormItem>
-      </ElForm>
-      <template #footer>
-        <ElButton @click="dryWeightDialogVisible = false">取消</ElButton>
-        <ElButton type="primary" @click="handleDryWeightSubmit">确认调整</ElButton>
-      </template>
-    </ElDialog>
-
-    <!-- ========== 传染病检查弹窗 ========== -->
-    <ElDialog
-      v-model="infectiousDialogVisible"
-      title="传染病检查结果"
-      width="700px"
-      destroy-on-close
-    >
-      <div v-if="selectedPatient" class="infectious-header">
-        <span>患者：{{ selectedPatient.patientName }}</span>
-        <ElTag
-          v-if="selectedPatient.bloodInfectious"
-          type="danger"
-          size="small"
-          effect="dark"
-        >
-          {{ selectedPatient.bloodInfectious }}
-        </ElTag>
-      </div>
-      <ElDescriptions :column="1" border size="small" class="infectious-table">
-        <ElDescriptionsItem
-          v-for="record in infectiousRecords"
-          :key="record.id"
-          :label="record.itemName"
-        >
-          <div class="infectious-result-row">
-            <ElTag
-              :type="getInfectiousResultType(record.result)"
-              size="small"
-              effect="light"
-            >
-              {{ record.result }}
-            </ElTag>
-            <span class="infectious-date">
-              检查日期：{{ record.checkDate }} | 报告日期：{{ record.reportDate }}
-            </span>
-          </div>
-        </ElDescriptionsItem>
-      </ElDescriptions>
-      <template #footer>
-        <ElButton @click="infectiousDialogVisible = false">关闭</ElButton>
-      </template>
-    </ElDialog>
-  </Page>
-</template>
-
-<style scoped>
-/* ==================== 三栏布局（左栏 + 中栏） ==================== */
-
-.sign-in-container {
-  display: flex;
-  height: calc(100vh - 140px);
-  min-height: 600px;
-  gap: 0;
-  background: #f5f7fa;
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-/* ==================== 左栏 ==================== */
-
-.left-panel {
-  width: 250px;
-  flex-shrink: 0;
-  background: #fff;
-  border-right: 1px solid #e4e7ed;
-  display: flex;
-  flex-direction: column;
-  transition: width 0.3s ease;
-  position: relative;
-  overflow: hidden;
-}
-
-.left-panel--collapsed {
-  width: 130px;
-}
-
-.collapse-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 36px;
-  cursor: pointer;
-  border-bottom: 1px solid #e4e7ed;
-  color: #606266;
-  transition: color 0.2s, background 0.2s;
-  flex-shrink: 0;
-}
-
-.collapse-btn:hover {
-  color: #409eff;
-  background: #ecf5ff;
-}
-
-.left-search {
-  padding: 8px 10px;
-  flex-shrink: 0;
-}
-
-.patient-stats-bar {
-  padding: 6px 10px;
-  font-size: 12px;
-  color: #606266;
-  background: #fafafa;
-  border-bottom: 1px solid #ebeef5;
-  flex-shrink: 0;
-  display: flex;
-  gap: 8px;
-}
-
-.patient-stats-bar b {
-  color: #409eff;
-}
-
-.stat-signed {
-  color: #67c23a;
-}
-
-.stat-signed b {
-  color: #67c23a !important;
-}
-
-.stat-pending {
-  color: #e6a23c;
-}
-
-.stat-pending b {
-  color: #e6a23c !important;
-}
-
-.patient-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 4px 0;
-}
-
-.patient-item {
-  padding: 10px 12px;
-  cursor: pointer;
-  border-bottom: 1px solid #f0f0f0;
-  transition: background 0.2s;
-}
-
-.patient-item:hover {
-  background: #ecf5ff;
-}
-
-.patient-item--active {
-  background: #d9ecff;
-  border-left: 3px solid #409eff;
-}
-
-.patient-item__header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 4px;
-}
-
-.patient-item__name {
-  font-size: 14px;
-  font-weight: 600;
-  color: #303133;
-}
-
-.infectious-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #f56c6c;
-  flex-shrink: 0;
-}
-
-.status-tag {
-  margin-left: auto;
-  font-size: 11px !important;
-}
-
-.patient-item__info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: #909399;
-}
-
-.bed-info {
-  color: #606266;
-  font-weight: 500;
-}
-
-.mode-info {
-  color: #409eff;
-  font-weight: 500;
-}
-
-.no-data {
-  text-align: center;
-  color: #c0c4cc;
-  padding: 40px 0;
-  font-size: 13px;
-}
-
-/* ==================== 中栏 ==================== */
-
-.center-panel {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  min-width: 0;
-}
-
-/* 顶部信息栏 */
-.top-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 10px 16px;
-  background: #fff;
-  border-bottom: 1px solid #e4e7ed;
-  flex-shrink: 0;
-}
-
-.top-bar__left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.top-bar__right {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.current-datetime {
-  font-size: 14px;
-  font-weight: 600;
-  color: #303133;
-  font-family: 'Courier New', Courier, monospace;
-}
-
-.current-shift,
-.filter-label {
-  font-size: 13px;
-  color: #606266;
-}
-
-/* 主体内容 */
-.main-content {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px;
-}
-
-/* 空状态 */
-.empty-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-}
-
-/* 签到区域 */
-.sign-in-section {
-  max-width: 700px;
-  margin: 0 auto;
-}
-
-.sign-in-prompt {
-  text-align: center;
-  margin-bottom: 20px;
-}
-
-.sign-in-card {
-  margin-bottom: 16px;
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.card-header__title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #303133;
-}
-
-.card-header__patient {
-  font-size: 13px;
-  color: #909399;
-}
-
-.card-header__actions {
-  display: flex;
-  gap: 4px;
-}
-
-.form-unit {
-  margin-left: 8px;
-  color: #909399;
-  font-size: 13px;
-}
-
-/* 患者详情区域 */
-.patient-detail-section {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.detail-card {
-  flex-shrink: 0;
-}
-
-.dry-weight-value {
-  font-weight: 700;
-  color: #e6a23c;
-  font-size: 14px;
-}
-
-.allergy-warning {
-  color: #f56c6c;
-  font-weight: 600;
-}
-
-/* 操作按钮区 */
-.action-buttons {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 16px 0;
-  flex-wrap: wrap;
-}
-
-/* ==================== 弹窗内样式 ==================== */
-
-.dry-weight-display {
-  font-size: 18px;
-  font-weight: 700;
-  color: #e6a23c;
-}
-
-.infectious-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 16px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #303133;
-}
-
-.infectious-table {
-  margin-top: 8px;
-}
-
-.infectious-result-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.infectious-date {
-  font-size: 12px;
-  color: #909399;
-}
-
-/* ==================== Element Plus 深度覆盖 ==================== */
-
-:deep(.el-descriptions__label) {
-  width: 100px;
-  min-width: 100px;
-}
-
-:deep(.el-card__header) {
-  padding: 12px 16px;
-}
-
-:deep(.el-card__body) {
-  padding: 16px;
-}
-
-:deep(.el-divider--vertical) {
-  height: 1.2em;
-}
-</style>
+            <div class="status-indicator">
+              <div
+                class="status-dot"
+                :style="{ background: row.CurrentState >= 4 ? '#
