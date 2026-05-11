@@ -1,8 +1,12 @@
 import axios from 'axios';
 import { aesEncrypt } from '#/utils/aes';
 
-// 后端服务器地址（用于设置 Host 请求头）
-const BACKEND_HOST = 'http://online.swskj.com:8080';
+// 使用相对路径，通过 Vite 代理转发到后端
+// 代理配置在 vite.config.ts 中
+const apiAxios = axios.create({
+  baseURL: '', // 使用相对路径
+  timeout: 30_000,
+});
 
 export namespace AuthApi {
   /** 登录接口参数 */
@@ -62,18 +66,16 @@ export namespace AuthApi {
 /**
  * 获取机构信息 - 登录前必须先调用
  * 原系统接口: GET /api/v1/Open/4003
- * 注意：此接口也需要包含 Account|Token|ClientType 请求头（即使为空）
  */
 export async function getOrganizationApi() {
-  const response = await axios.get<AuthApi.OrganizationResult>(
-    `${BACKEND_HOST}/api/v1/Open/4003`,
+  const response = await apiAxios.get<AuthApi.OrganizationResult>(
+    '/api/v1/Open/4003',
     {
       headers: {
         'Content-Type': 'application/json',
-        Account: 'null|null', // 必须包含，即使为空
-        Token: 'null', // 必须包含，即使为空
+        Account: '',
+        Token: '',
         ClientType: 'PC',
-        Host: BACKEND_HOST, // 覆盖代理默认的 localhost Host 头
       },
     },
   );
@@ -83,14 +85,12 @@ export async function getOrganizationApi() {
   if (resp.Code === 200) {
     const { OrganizationInfo, OrgDepartment, MachineCode } = resp.Data;
 
-    // 存储机构信息到 sessionStorage
     sessionStorage.setItem('hdOrgId', OrganizationInfo.Id);
     sessionStorage.setItem('hdOrgAuthCode', OrganizationInfo.OrgAuthCode);
     sessionStorage.setItem('hdMachineCode', MachineCode);
     sessionStorage.setItem('hdAgyName', OrganizationInfo.Name);
     sessionStorage.setItem('hdYqArr', JSON.stringify(OrgDepartment));
 
-    // 如果只有一个院区，自动选择
     if (OrgDepartment.length === 1) {
       sessionStorage.setItem('hdEmpDepartment', OrgDepartment[0].Id);
     }
@@ -106,29 +106,25 @@ export async function getOrganizationApi() {
  * 原系统接口: POST /api/v1/Account/LoginToken/{加密账号}/{加密密码}
  */
 export async function loginApi(data: AuthApi.LoginParams) {
-  // 使用与原系统一致的AES加密
   const jmaccount = aesEncrypt(data.username?.trim() || '');
   const jmpwd = aesEncrypt(data.password?.trim() || '');
 
-  // 从 sessionStorage 获取机构信息
   const orgId = sessionStorage.getItem('hdOrgId') || '';
   const orgAuthCode = sessionStorage.getItem('hdOrgAuthCode') || '';
   const empDepartment = sessionStorage.getItem('hdEmpDepartment') || '';
 
-  // 直接通过Vite代理发送请求
-  const response = await axios.post<AuthApi.OriginalLoginResult>(
-    `${BACKEND_HOST}/api/v1/Account/LoginToken/${jmaccount}/${jmpwd}`,
+  const response = await apiAxios.post<AuthApi.OriginalLoginResult>(
+    `/api/v1/Account/LoginToken/${jmaccount}/${jmpwd}`,
     null,
     {
       headers: {
         'Content-Type': 'application/json',
-        Account: 'null|null',
-        Token: 'null', // 登录时Token为空
+        Account: encodeURIComponent(data.username?.trim() || ''),
+        Token: '',
         ClientType: 'PC',
         OrgId: orgId,
         OrgAuthCode: orgAuthCode,
         Department: empDepartment,
-        Host: BACKEND_HOST, // 覆盖代理默认的 localhost Host 头
       },
     },
   );
@@ -146,7 +142,7 @@ export async function loginApi(data: AuthApi.LoginParams) {
 }
 
 /**
- * 获取当前用户信息 - 从sessionStorage读取（原系统方式）
+ * 获取当前用户信息
  */
 export async function getUserInfoApi() {
   const userInfoStr = sessionStorage.getItem('hdUserInfo');
@@ -170,7 +166,7 @@ export async function getUserInfoApi() {
 }
 
 /**
- * 退出登录 - 对接原系统
+ * 退出登录
  */
 export async function logoutApi() {
   const userName = sessionStorage.getItem('hdUserName');
@@ -182,21 +178,16 @@ export async function logoutApi() {
   if (userName) {
     try {
       const jmaccount = aesEncrypt(userName);
-      await axios.post(
-        `/api/v1/Account/LogoutToken/${jmaccount}`,
-        null,
-        {
-          headers: {
-            Account: encodeURIComponent(userName),
-            Token: token,
-            ClientType: 'PC',
-            OrgId: orgId,
-            OrgAuthCode: orgAuthCode,
-            Department: empDepartment,
-            Host: BACKEND_HOST, // 覆盖代理默认的 localhost Host 头
-          },
+      await apiAxios.post(`/api/v1/Account/LogoutToken/${jmaccount}`, null, {
+        headers: {
+          Account: encodeURIComponent(userName),
+          Token: token,
+          ClientType: 'PC',
+          OrgId: orgId,
+          OrgAuthCode: orgAuthCode,
+          Department: empDepartment,
         },
-      );
+      });
     } catch {
       // ignore
     }
@@ -204,7 +195,7 @@ export async function logoutApi() {
 }
 
 /**
- * 获取用户权限码 - 返回通配符（原系统使用菜单+按钮权限）
+ * 获取用户权限码
  */
 export async function getAccessCodesApi() {
   return ['*'];
