@@ -6,7 +6,7 @@ const API_BASE = 'http://online.swskj.com:8080';
 
 // 创建专用 axios 实例，baseURL 直接指向后端
 const apiAxios = axios.create({
-  baseURL: '', // 使用相对路径
+  baseURL: API_BASE, // 使用相对路径
   timeout: 30_000,
 });
 
