@@ -230,14 +230,31 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { useStore } from 'vuex';
 import {
   ElButton, ElSelect, ElDatePicker, ElCheckbox, ElDialog, ElForm, ElFormItem,
   ElOption, ElRow, ElCol, ElTable, ElMessage, ElMessageBox
 } from 'element-plus';
 import type { FormInstance } from 'element-plus';
-import { swsApi } from '#/api';
-import { formatDateString } from '#/utils/format';
+import { swsApi } from '#/api/sws';
+
+// ==================== 日期格式化工具 ====================
+
+function formatDateString(date: Date | string, pattern: string): string {
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  const seconds = String(d.getSeconds()).padStart(2, '0');
+  return pattern
+    .replace('yyyy', String(year))
+    .replace('MM', month)
+    .replace('dd', day)
+    .replace('HH', hours)
+    .replace('mm', minutes)
+    .replace('ss', seconds);
+}
 
 // ==================== 类型定义 ====================
 
@@ -307,9 +324,21 @@ interface ReschedulingData {
 
 // ==================== Store & Router ====================
 
-const store = useStore();
 const route = useRoute();
 const router = useRouter();
+
+// 本地状态（原系统通过 Vuex 管理，此处用本地 ref 替代）
+const SingleId = ref('');
+const dialysisColorMap = (type: string) => {
+  const colorMap: Record<string, string> = {
+    'HD': '#e6f7ff',
+    'HDF': '#f6ffed',
+    'HF': '#fff7e6',
+    'HP': '#fff1f0',
+    'CRRT': '#f9f0ff',
+  };
+  return colorMap[type] || '#ffffff';
+};
 
 // ==================== 权限按钮 ====================
 
@@ -450,9 +479,6 @@ const filterTxqDataNew = ref<DictionaryItem[]>([]);
 const showDialyzer = ref(false);
 
 // ==================== 计算属性 ====================
-
-const SingleId = computed(() => store.getters.SingleId);
-const dialysisColorMap = computed(() => store.getters.dialysisColorMap);
 
 const filterData = computed(() => {
   if (now.value == -1) {
@@ -696,7 +722,7 @@ function searchSch() {
 }
 
 function clickPat(PatientId: string) {
-  store.commit('setSingleId', PatientId);
+  SingleId.value = PatientId;
 }
 
 function pbTdstatus(val: string): number {
@@ -891,7 +917,7 @@ onMounted(() => {
 watch(() => route.name, (newRoute) => {
   if (newRoute == 'patients_scheduling') {
     load();
-    now.value = store.state.app.SingleId;
+    now.value = SingleId.value;
   }
 });
 
@@ -901,9 +927,11 @@ watch(now, (newVal, oldVal) => {
   }
 });
 
-watch(SingleId, (val) => {
-  now.value = val;
-}, { immediate: true });
+watch(SingleId, (newVal, oldVal) => {
+  if (newVal !== -1 && newVal !== oldVal) {
+    loadTj(String(newVal));
+  }
+});
 </script>
 
 <style scoped>
