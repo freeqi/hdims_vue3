@@ -25,7 +25,11 @@
     "schedule": "Dialysis Schedule",
     "monitoring": "Dialysis Monitoring",
     "bed": "Bed Management",
-    "orders": "Orders"
+    "orders": "Orders",
+    "doctor": "Dialysis Doctor",
+    "confirmPlan": "Confirm Plan",
+    "dialysisMode": "Dialysis Mode",
+    "checkItem": "Check Item"
   },
   "medical": {
     "title": "Medical Records",

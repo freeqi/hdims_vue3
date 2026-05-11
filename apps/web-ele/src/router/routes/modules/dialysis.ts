@@ -66,6 +66,42 @@ const routes: RouteRecordRaw[] = [
           title: $t('page.dialysis.orders'),
         },
       },
+      {
+        name: 'DialysisDoctor',
+        path: '/dialysis/doctor',
+        component: () => import('#/views/dialysis/doctor/index.vue'),
+        meta: {
+          icon: 'lucide:stethoscope',
+          title: $t('page.dialysis.doctor'),
+        },
+      },
+      {
+        name: 'DialysisDoctorConfirmPlan',
+        path: '/dialysis/doctor/confirm-plan',
+        component: () => import('#/views/dialysis/doctor/confirm-plan.vue'),
+        meta: {
+          hideInMenu: true,
+          title: $t('page.dialysis.confirmPlan'),
+        },
+      },
+      {
+        name: 'DialysisDoctorDialysisMode',
+        path: '/dialysis/doctor/dialysis-mode',
+        component: () => import('#/views/dialysis/doctor/dialysis-mode.vue'),
+        meta: {
+          hideInMenu: true,
+          title: $t('page.dialysis.dialysisMode'),
+        },
+      },
+      {
+        name: 'DialysisDoctorCheckItem',
+        path: '/dialysis/doctor/check-item',
+        component: () => import('#/views/dialysis/doctor/check-item.vue'),
+        meta: {
+          hideInMenu: true,
+          title: $t('page.dialysis.checkItem'),
+        },
+      },
     ],
   },
 ];

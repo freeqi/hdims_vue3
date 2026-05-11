@@ -26,7 +26,11 @@
     "schedule": "透析排班",
     "monitoring": "透析监控",
     "bed": "床位管理",
-    "orders": "开立医嘱"
+    "orders": "开立医嘱",
+    "doctor": "透析医生",
+    "confirmPlan": "确认方案",
+    "dialysisMode": "透析模式设置",
+    "checkItem": "检验项目管理"
   },
   "medical": {
     "title": "医疗文书",
